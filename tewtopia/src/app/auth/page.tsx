@@ -15,32 +15,34 @@ export default function AuthPage() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-4">
-      <h1 className="text-2xl font-bold mb-4">Log In</h1>
-      <form onSubmit={handleSubmit} className="w-full max-w-xs space-y-4">
-        <input
-          type="text"
-          placeholder="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          className="w-full p-2 border rounded"
-          required
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="w-full p-2 border rounded"
-          required
-        />
-        <button
-          type="submit"
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded"
-        >
-          Log In
-        </button>
-      </form>
+    <main className="flex min-h-screen items-center justify-center bg-gray-100 p-4">
+      <div className="w-full max-w-xs rounded bg-white p-6 shadow">
+        <h1 className="text-2xl font-bold mb-4 text-center">Log In</h1>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <input
+            type="text"
+            placeholder="Username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            className="w-full rounded border border-gray-300 p-2"
+            required
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full rounded border border-gray-300 p-2"
+            required
+          />
+          <button
+            type="submit"
+            className="w-full rounded bg-blue-600 py-2 px-4 font-semibold text-white hover:bg-blue-700"
+          >
+            Log In
+          </button>
+        </form>
+      </div>
     </main>
   );
 }
