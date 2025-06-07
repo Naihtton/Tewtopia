@@ -6,9 +6,9 @@ export default function MainPage() {
   const [open, setOpen] = useState(true);
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-gray-100">
       <aside
-        className={`${open ? 'w-48' : 'w-12'} bg-gray-800 text-white transition-all`}
+        className={`${open ? 'w-48' : 'w-12'} bg-gray-800 text-white shadow transition-all`}
       >
         <button
           onClick={() => setOpen(!open)}
@@ -30,7 +30,7 @@ export default function MainPage() {
           </nav>
         )}
       </aside>
-      <main className="flex-1 p-4">
+      <main className="flex-1 p-6 bg-white">
         <h1 className="text-2xl font-bold mb-4">Main Page</h1>
         <p>Welcome! Use the side menu to navigate.</p>
       </main>
