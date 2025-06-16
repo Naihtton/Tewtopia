@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import rawPdf from '../../../../testByteArray.ts?raw';
+import rawPdf from './testByteArray';
 
 export default function PdfPage() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
