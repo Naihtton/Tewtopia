@@ -3,14 +3,15 @@
 import { useEffect, useState } from 'react';
 import rawPdf from '../pdf/testByteArray';
 import { Worker, Viewer } from '@react-pdf-viewer/core';
-import { defaultLayoutPlugin } from '@react-pdf-viewer/default-layout';
+import { toolbarPlugin } from '@react-pdf-viewer/toolbar';
 import '@react-pdf-viewer/core/lib/styles/index.css';
-import '@react-pdf-viewer/default-layout/lib/styles/index.css';
+import '@react-pdf-viewer/toolbar/lib/styles/index.css';
 
 export default function MainPage() {
   const [open, setOpen] = useState(true);
   const [pdfUrl, setPdfUrl] = useState<string>();
-  const defaultLayoutPluginInstance = defaultLayoutPlugin();
+  const toolbarPluginInstance = toolbarPlugin();
+  const { Toolbar } = toolbarPluginInstance;
 
   useEffect(() => {
     const byteString = atob(rawPdf.trim());
@@ -53,9 +54,26 @@ export default function MainPage() {
         <h1 className="text-2xl font-bold mb-4">Main Page</h1>
         <p className="mb-4">Welcome! Use the side menu to navigate.</p>
         {pdfUrl && (
-          <div className="h-[80vh] border">
+          <div className="h-[80vh] border flex flex-col">
             <Worker workerUrl="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js">
-              <Viewer fileUrl={pdfUrl} plugins={[defaultLayoutPluginInstance]} />
+              <Toolbar>
+                {(slots) => {
+                  const { ZoomOut, ZoomIn, CurrentPageInput, NumberOfPages, Download } = slots;
+                  return (
+                    <div className="flex items-center gap-2 border-b p-2">
+                      <ZoomOut />
+                      <ZoomIn />
+                      <div className="flex items-center gap-1">
+                        <CurrentPageInput /> / <NumberOfPages />
+                      </div>
+                      <Download />
+                    </div>
+                  );
+                }}
+              </Toolbar>
+              <div className="flex-1 overflow-hidden">
+                <Viewer fileUrl={pdfUrl} plugins={[toolbarPluginInstance]} />
+              </div>
             </Worker>
           </div>
         )}
