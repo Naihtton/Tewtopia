@@ -1,3 +1,36 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+:root {
+  --background: #f7f4ec;
+  --foreground: #171717;
+  --card: #ffffff;
+  --muted: #efe9db;
+  --muted-foreground: #7b7568;
+  --border: rgba(23, 23, 23, 0.1);
+  --accent: #b85c38;
+  --accent-soft: #f4d9c7;
+  --ink-soft: #4e473d;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    font-size: 16px;
+  }
+
+  body {
+    background:
+      radial-gradient(circle at top left, rgba(184, 92, 56, 0.08), transparent 28%),
+      radial-gradient(circle at bottom right, rgba(214, 170, 92, 0.14), transparent 24%),
+      var(--background);
+    color: var(--foreground);
+    font-family: "Avenir Next", "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  ::selection {
+    background: rgba(184, 92, 56, 0.18);
+  }
+}

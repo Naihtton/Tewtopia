@@ -1,0 +1,13 @@
+import { redirect } from 'next/navigation';
+import { ProfileForm } from '@/app/main/profile/_components/profile-form';
+import { getCurrentUserProfile } from '@/lib/profiles';
+
+export default async function ProfilePage() {
+  const result = await getCurrentUserProfile();
+
+  if (!result) {
+    redirect('/auth');
+  }
+
+  return <ProfileForm initialProfile={result.profile} initialError={result.error} />;
+}
