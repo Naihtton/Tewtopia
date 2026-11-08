@@ -30,6 +30,7 @@ export type BrowseTutorCard = {
   headline: string;
   about: string;
   preferredSubjects: string[];
+  teachingLevels: string[];
   teachingModes: string[];
   hourlyRate: number | null;
   yearsExperience: number | null;
@@ -98,99 +99,48 @@ export async function getCurrentTutorProfile() {
   };
 }
 
-export async function listVisibleTutorsForStudents() {
+type PublicTutorCardRow = {
+  id: string;
+  display_name: string | null;
+  headline: string | null;
+  about: string | null;
+  subjects: string[] | null;
+  teaching_levels: string[] | null;
+  teaching_modes: string[] | null;
+  hourly_rate: number | null;
+  years_experience: number | null;
+  bio: string | null;
+};
+
+// Reads only the public_tutor_cards view (no email). Works for guests and signed-in users.
+export async function listPublicTutorCards(): Promise<{ tutors: BrowseTutorCard[]; error: string | null }> {
   const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('public_tutor_cards')
+    .select(
+      'id, display_name, headline, about, subjects, teaching_levels, teaching_modes, hourly_rate, years_experience, bio',
+    )
+    .order('display_name')
+    .returns<PublicTutorCardRow[]>();
 
-  const { data: publicSettingsRows, error: settingsError } = await supabase
-    .from('user_settings')
-    .select('id')
-    .eq('profile_visibility', 'public');
-
-  if (settingsError) {
-    return {
-      tutors: [] as BrowseTutorCard[],
-      error: settingsError.message,
-    };
+  if (error) {
+    // Public page: log the details server-side, show visitors a plain message.
+    console.error('listPublicTutorCards failed:', error.message);
+    return { tutors: [], error: "We couldn't load tutors right now. Please try again shortly." };
   }
-
-  const visibleIds = publicSettingsRows.map((row) => row.id);
-
-  if (visibleIds.length === 0) {
-    return {
-      tutors: [] as BrowseTutorCard[],
-      error: null,
-    };
-  }
-
-  const { data: profileRows, error: profileError } = await supabase
-    .from('profiles')
-    .select('id, display_name, preferred_subjects, bio')
-    .eq('role', 'tutor')
-    .in('id', visibleIds);
-
-  if (profileError) {
-    return {
-      tutors: [] as BrowseTutorCard[],
-      error: profileError.message,
-    };
-  }
-
-  const profileMap = new Map(
-    profileRows.map((row) => [
-      row.id,
-      {
-        displayName: row.display_name ?? 'Unnamed tutor',
-        preferredSubjects: row.preferred_subjects ?? [],
-        bio: row.bio ?? '',
-      },
-    ]),
-  );
-
-  const tutorIds = Array.from(profileMap.keys());
-
-  if (tutorIds.length === 0) {
-    return {
-      tutors: [] as BrowseTutorCard[],
-      error: null,
-    };
-  }
-
-  const { data: tutorRows, error: tutorError } = await supabase
-    .from('tutor_profiles')
-    .select('id, headline, hourly_rate, years_experience, teaching_modes, about')
-    .in('id', tutorIds);
-
-  if (tutorError) {
-    return {
-      tutors: [] as BrowseTutorCard[],
-      error: tutorError.message,
-    };
-  }
-
-  const tutors: BrowseTutorCard[] = tutorRows
-    .map((row) => {
-      const profile = profileMap.get(row.id);
-
-      if (!profile) {
-        return null;
-      }
-
-      return {
-        id: row.id,
-        displayName: profile.displayName,
-        // Columns are `not null default ''`, so fall back on empty strings, not just null.
-        headline: row.headline || 'Tutor profile in progress',
-        about: row.about || profile.bio,
-        preferredSubjects: profile.preferredSubjects,
-        teachingModes: row.teaching_modes ?? [],
-        hourlyRate: row.hourly_rate,
-        yearsExperience: row.years_experience,
-      };
-    })
-    .filter((tutor): tutor is BrowseTutorCard => Boolean(tutor));
 
   return {
-    tutors,
+    tutors: (data ?? []).map((row) => ({
+      id: row.id,
+      displayName: row.display_name ?? '',
+      headline: row.headline || 'Tutor',
+      about: row.about || row.bio || '',
+      preferredSubjects: row.subjects ?? [],
+      teachingLevels: row.teaching_levels ?? [],
+      teachingModes: row.teaching_modes ?? [],
+      hourlyRate: row.hourly_rate,
+      yearsExperience: row.years_experience,
+    })),
     error: null,
   };
 }

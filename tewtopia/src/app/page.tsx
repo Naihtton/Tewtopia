@@ -11,7 +11,7 @@ export default function Home() {
         <p className="mt-5 max-w-md text-lg leading-8 text-ink-soft">
           Tewtopia connects students with the perfect tutors to help them succeed.
         </p>
-        <Link href="/auth" className={`${ui.buttonPrimary} mt-8 px-7 py-3 text-base`}>
+        <Link href="/tutors" className={`${ui.buttonPrimary} mt-8 px-7 py-3 text-base`}>
           Get Started
         </Link>
       </main>

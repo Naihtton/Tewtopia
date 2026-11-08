@@ -33,7 +33,7 @@ function toFormState(settings: UserSettings): SettingsState {
 
 const visibilityHelp: Record<UserSettings['profileVisibility'], string> = {
   private: 'Only you can access your profile details.',
-  matched_only: 'Visible after you are matched with another user.',
+  matched_only: 'Same as public until matching is available.',
   public: 'Visible in public tutor discovery when applicable.',
 };
 

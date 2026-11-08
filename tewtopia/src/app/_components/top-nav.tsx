@@ -21,7 +21,7 @@ function tabsFor(role: UserRole) {
     { href: '/main/dashboard', label: 'Dashboard' },
     role === 'tutor'
       ? { href: '/main/tutor-profile', label: 'Tutor profile' }
-      : { href: '/main/tutors', label: 'Find tutors' },
+      : { href: '/tutors', label: 'Find tutors' },
     { href: '/main/profile', label: 'Profile' },
     { href: '/main/settings', label: 'Settings' },
   ];
@@ -30,12 +30,16 @@ function tabsFor(role: UserRole) {
 function ctaFor(role: UserRole) {
   return role === 'tutor'
     ? { href: '/main/tutor-profile', label: 'Edit tutor profile' }
-    : { href: '/main/tutors', label: 'Find a tutor' };
+    : { href: '/tutors', label: 'Find a tutor' };
 }
+
+const guestTabs = [{ href: '/tutors', label: 'Find tutors' }];
 
 export function TopNav({ user }: TopNavProps) {
   const pathname = usePathname();
-  const tabs = user ? tabsFor(user.role) : [];
+  const tabs = user ? tabsFor(user.role) : guestTabs;
+  // Come back to this page after logging in (the home page falls back to the default).
+  const loginHref = pathname === '/' ? '/auth' : `/auth?next=${encodeURIComponent(pathname)}`;
   const cta = user ? ctaFor(user.role) : null;
 
   const tabLinks = tabs.map((tab) => {
@@ -86,7 +90,7 @@ export function TopNav({ user }: TopNavProps) {
               <LogoutButton />
             </>
           ) : pathname === '/auth' ? null : (
-            <Link href="/auth" className={ui.buttonSecondary}>
+            <Link href={loginHref} className={ui.buttonSecondary}>
               Log in
             </Link>
           )}
