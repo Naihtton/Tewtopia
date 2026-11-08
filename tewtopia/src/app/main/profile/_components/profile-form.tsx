@@ -118,7 +118,7 @@ export function ProfileForm({ initialProfile, initialError }: ProfileFormProps) 
     <div className="max-w-4xl space-y-6">
       <div>
         <h1 className={`${ui.title} text-4xl md:text-5xl`}>Profile</h1>
-        <p className="mt-3 max-w-2xl text-base text-stone-500">Manage account details, role information, and tutor preferences.</p>
+        <p className="mt-3 max-w-2xl text-base text-muted">Manage account details, role information, and tutor preferences.</p>
         <div className={`${ui.chipAccent} mt-5`}>
           Setup progress: {completedCount}/4
         </div>
@@ -147,7 +147,7 @@ export function ProfileForm({ initialProfile, initialError }: ProfileFormProps) 
           </div>
 
           <div>
-            <p className="mb-2 block text-sm font-medium text-gray-700">Role</p>
+            <p className="mb-2 block text-sm font-medium text-ink-soft">Role</p>
             <div className="grid gap-3 sm:grid-cols-2">
               {([
                 {
@@ -169,12 +169,12 @@ export function ProfileForm({ initialProfile, initialError }: ProfileFormProps) 
                   }
                   className={`rounded-[1.25rem] border p-4 text-left transition-colors ${
                     profile.role === option.value
-                      ? 'border-stone-950 bg-stone-100'
-                      : 'border-stone-200 hover:border-stone-300 hover:bg-stone-50'
+                      ? 'border-primary bg-primary-soft'
+                      : 'border-line hover:border-primary/50 hover:bg-cream'
                   }`}
                 >
-                  <p className="font-semibold text-stone-900">{option.label}</p>
-                  <p className="mt-1 text-sm text-stone-500">{option.description}</p>
+                  <p className="font-semibold text-ink">{option.label}</p>
+                  <p className="mt-1 text-sm text-muted">{option.description}</p>
                 </button>
               ))}
             </div>
@@ -230,11 +230,11 @@ export function ProfileForm({ initialProfile, initialError }: ProfileFormProps) 
             <button
               type="submit"
               disabled={isSaving}
-              className={`${ui.buttonPrimary} disabled:cursor-not-allowed disabled:bg-stone-400`}
+              className={`${ui.buttonPrimary} disabled:cursor-not-allowed`}
             >
               {isSaving ? 'Saving...' : 'Save profile'}
             </button>
-            <p className="text-sm text-stone-500">
+            <p className="text-sm text-muted">
               {profile.role === 'tutor'
                 ? 'After this, complete Tutor Profile to appear ready for students.'
                 : 'Keep your subjects updated so tutor matching feels relevant.'}
@@ -245,40 +245,40 @@ export function ProfileForm({ initialProfile, initialError }: ProfileFormProps) 
         <aside className={`${ui.panel} space-y-4 p-5`}>
           <div>
             <h2 className={`${ui.title} text-2xl`}>Account Snapshot</h2>
-            <p className="mt-1 text-sm text-stone-500">Live summary of the current profile state.</p>
+            <p className="mt-1 text-sm text-muted">Live summary of the current profile state.</p>
           </div>
           <dl className="grid gap-4 text-sm">
             <div>
-              <dt className="text-stone-500">Next recommended step</dt>
-              <dd className="font-medium text-stone-900">
+              <dt className="text-muted">Next recommended step</dt>
+              <dd className="font-medium text-ink">
                 {profile.role === 'tutor' ? 'Open Tutor Profile after saving.' : 'Browse tutors after saving.'}
               </dd>
             </div>
             <div>
-              <dt className="text-stone-500">Email</dt>
-              <dd className="font-medium text-stone-900">{profile.email}</dd>
+              <dt className="text-muted">Email</dt>
+              <dd className="font-medium text-ink">{profile.email}</dd>
             </div>
             <div>
-              <dt className="text-stone-500">Display name</dt>
-              <dd className="font-medium text-stone-900">{profile.displayName || 'Not set'}</dd>
+              <dt className="text-muted">Display name</dt>
+              <dd className="font-medium text-ink">{profile.displayName || 'Not set'}</dd>
             </div>
             <div>
-              <dt className="text-stone-500">Role</dt>
-              <dd className="font-medium capitalize text-stone-900">{profile.role}</dd>
+              <dt className="text-muted">Role</dt>
+              <dd className="font-medium capitalize text-ink">{profile.role}</dd>
             </div>
             <div>
-              <dt className="text-stone-500">Preferred subjects</dt>
-              <dd className="font-medium text-stone-900">{profile.preferredSubjects || 'None yet'}</dd>
+              <dt className="text-muted">Preferred subjects</dt>
+              <dd className="font-medium text-ink">{profile.preferredSubjects || 'None yet'}</dd>
             </div>
             <div>
-              <dt className="text-stone-500">Status</dt>
+              <dt className="text-muted">Status</dt>
               <dd className="font-medium text-emerald-700">
                 {profile.status === 'profile_ready' ? 'Profile ready' : 'Profile incomplete'}
               </dd>
             </div>
             <div>
-              <dt className="text-stone-500">Last updated</dt>
-              <dd className="font-medium text-stone-900">
+              <dt className="text-muted">Last updated</dt>
+              <dd className="font-medium text-ink">
                 {profile.updatedAt ? new Date(profile.updatedAt).toLocaleString() : 'Not saved yet'}
               </dd>
             </div>
