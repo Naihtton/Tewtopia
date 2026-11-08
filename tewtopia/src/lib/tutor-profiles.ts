@@ -1,5 +1,6 @@
 import { getCurrentUserProfile, type UserProfile } from '@/lib/profiles';
 import { createClient } from '@/lib/supabase/server';
+import { normalizeTeachingLevels, type TeachingLevel } from '@/lib/tutor-visibility';
 
 export type TutorProfile = {
   id: string;
@@ -7,6 +8,7 @@ export type TutorProfile = {
   hourlyRate: number | null;
   yearsExperience: number | null;
   teachingModes: string[];
+  teachingLevels: TeachingLevel[];
   about: string;
   updatedAt: string | null;
 };
@@ -17,6 +19,7 @@ type TutorProfileRow = {
   hourly_rate: number | null;
   years_experience: number | null;
   teaching_modes: string[] | null;
+  teaching_levels: string[] | null;
   about: string | null;
   updated_at: string | null;
 };
@@ -39,6 +42,7 @@ function buildDefaultTutorProfile(userId: string): TutorProfile {
     hourlyRate: null,
     yearsExperience: null,
     teachingModes: [],
+    teachingLevels: [],
     about: '',
     updatedAt: null,
   };
@@ -51,6 +55,7 @@ function mapTutorProfileRow(row: TutorProfileRow): TutorProfile {
     hourlyRate: row.hourly_rate,
     yearsExperience: row.years_experience,
     teachingModes: row.teaching_modes ?? [],
+    teachingLevels: normalizeTeachingLevels(row.teaching_levels),
     about: row.about ?? '',
     updatedAt: row.updated_at,
   };
@@ -74,7 +79,7 @@ export async function getCurrentTutorProfile() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('tutor_profiles')
-    .select('id, headline, hourly_rate, years_experience, teaching_modes, about, updated_at')
+    .select('id, headline, hourly_rate, years_experience, teaching_modes, teaching_levels, about, updated_at')
     .eq('id', profileResult.profile.id)
     .maybeSingle<TutorProfileRow>();
 
