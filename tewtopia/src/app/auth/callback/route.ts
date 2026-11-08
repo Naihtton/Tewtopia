@@ -1,20 +1,21 @@
 import { NextResponse } from 'next/server';
-import { safeNextPath } from '@/lib/auth-redirect';
+import { parseAuthCallback } from '@/lib/auth-redirect';
 import { createClient } from '@/lib/supabase/server';
 
 // Target of the sign-up confirmation email (only used when Supabase email
-// confirmation is on). Exchanges the one-time code for a session cookie.
+// confirmation is on). Turns the link into a session cookie, then continues.
 export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const code = url.searchParams.get('code');
-  const next = safeNextPath(url.searchParams.get('next')) ?? '/main/dashboard';
+  const callback = parseAuthCallback(new URL(request.url).searchParams);
 
-  if (code) {
+  if (callback.kind !== 'invalid') {
     const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { error } =
+      callback.kind === 'otp'
+        ? await supabase.auth.verifyOtp({ token_hash: callback.tokenHash, type: callback.type })
+        : await supabase.auth.exchangeCodeForSession(callback.code);
 
     if (!error) {
-      return NextResponse.redirect(new URL(next, request.url));
+      return NextResponse.redirect(new URL(callback.next, request.url));
     }
   }
 

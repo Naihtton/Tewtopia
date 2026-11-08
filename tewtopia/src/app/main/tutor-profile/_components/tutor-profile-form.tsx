@@ -5,7 +5,7 @@ import { useState } from 'react';
 import type { UserProfile } from '@/lib/profiles';
 import type { TutorProfile } from '@/lib/tutor-profiles';
 import {
-  missingTutorFields,
+  tutorListingStatus,
   normalizeTeachingLevels,
   TEACHING_LEVELS,
   type TeachingLevel,
@@ -16,6 +16,7 @@ type TutorProfileFormProps = {
   profile: UserProfile;
   tutorProfile: TutorProfile;
   initialError: string | null;
+  visibility: string | null;
 };
 
 type TutorProfileState = {
@@ -56,17 +57,18 @@ function addMode(currentValue: string, mode: string) {
   return [...items, mode].join(', ');
 }
 
-export function TutorProfileForm({ profile, tutorProfile, initialError }: TutorProfileFormProps) {
+export function TutorProfileForm({ profile, tutorProfile, initialError, visibility }: TutorProfileFormProps) {
   const [form, setForm] = useState<TutorProfileState>(() => toFormState(tutorProfile));
   const [error, setError] = useState<string | null>(initialError);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   // Mirrors the public_tutor_cards view, using what is currently on screen.
-  const missing = missingTutorFields({
+  const { listed, missing, hiddenByPrivacy } = tutorListingStatus({
     displayName: profile.displayName,
     hourlyRate: form.hourlyRate.trim() === '' ? null : Number(form.hourlyRate),
     subjects: profile.preferredSubjects,
     teachingLevels: form.teachingLevels,
+    visibility,
   });
   const missingInProfile = missing.includes('display name') || missing.includes('subjects');
 
@@ -136,25 +138,37 @@ export function TutorProfileForm({ profile, tutorProfile, initialError }: TutorP
         </p>
       </div>
 
-      {missing.length === 0 ? (
+      {listed ? (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
           Visible to students on Find tutors.
         </div>
       ) : (
-        <div className="rounded-2xl border border-line bg-primary-soft px-4 py-3 text-sm text-primary-deep">
-          <span className="font-bold">Hidden from students</span> — still missing: {missing.join(', ')}.
-          {missingInProfile && (
-            <>
-              {' '}
-              <Link href="/main/profile" className="font-bold underline underline-offset-2">
-                Edit in Profile
+        <div className="space-y-1 rounded-2xl border border-line bg-primary-soft px-4 py-3 text-sm text-primary-deep">
+          {missing.length > 0 && (
+            <p>
+              <span className="font-bold">Hidden from students</span> — still missing: {missing.join(', ')}.
+              {missingInProfile && (
+                <>
+                  {' '}
+                  <Link href="/main/profile" className="font-bold underline underline-offset-2">
+                    Edit in Profile
+                  </Link>
+                </>
+              )}
+            </p>
+          )}
+          {hiddenByPrivacy && (
+            <p>
+              <span className="font-bold">Hidden from students</span> — your visibility is set to Private.{' '}
+              <Link href="/main/settings" className="font-bold underline underline-offset-2">
+                Change in Settings
               </Link>
-            </>
+            </p>
           )}
         </div>
       )}
 
-      {error && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+      {error &&<div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
       {savedMessage && (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
           {savedMessage}

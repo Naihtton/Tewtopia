@@ -37,3 +37,13 @@ export function missingTutorFields(input: {
 
   return missing;
 }
+
+// Full listing rule (fields + visibility), matching the public_tutor_cards view.
+export function tutorListingStatus(
+  input: Parameters<typeof missingTutorFields>[0] & { visibility: string | null },
+): { listed: boolean; missing: MissingTutorField[]; hiddenByPrivacy: boolean } {
+  const missing = missingTutorFields(input);
+  const hiddenByPrivacy = input.visibility === 'private';
+
+  return { listed: missing.length === 0 && !hiddenByPrivacy, missing, hiddenByPrivacy };
+}

@@ -83,7 +83,7 @@ create policy "Users can insert own roles"
 on public.user_roles
 for insert
 to authenticated
-with check ((select auth.uid()) = user_id);
+with check ((select auth.uid()) = user_id and role in ('student', 'tutor'));
 
 drop policy if exists "Users can update own roles" on public.user_roles;
 create policy "Users can update own roles"
@@ -91,7 +91,7 @@ on public.user_roles
 for update
 to authenticated
 using ((select auth.uid()) = user_id)
-with check ((select auth.uid()) = user_id);
+with check ((select auth.uid()) = user_id and role in ('student', 'tutor'));
 
 -- Keeps user_roles in step with profiles.role. Runs as security definer because
 -- user_roles has no delete policy: users must not be able to drop roles themselves.
@@ -278,16 +278,22 @@ check (teaching_levels <@ array['primary', 'lower_secondary', 'upper_secondary',
 drop policy if exists "Authenticated users can view public tutor cards" on public.tutor_profiles;
 drop policy if exists "Authenticated users can view public tutor profiles" on public.profiles;
 
--- Users may not promote themselves to admin (or demote an admin) through the API.
--- Only the service role (dashboard / server-side admin tooling) can.
+-- Users may not make themselves admin (on insert or update) or demote an admin
+-- through the API. Only the service role (server-side admin tooling) can.
 create or replace function public.guard_profile_role()
 returns trigger
 language plpgsql
 as $$
 begin
-  if old.role is distinct from new.role
-     and (old.role = 'admin' or new.role = 'admin')
-     and coalesce(auth.role(), '') <> 'service_role' then
+  if coalesce(auth.role(), '') = 'service_role' then
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.role = 'admin' then
+      raise exception 'role change not allowed';
+    end if;
+  elsif old.role is distinct from new.role and (old.role = 'admin' or new.role = 'admin') then
     raise exception 'role change not allowed';
   end if;
 
@@ -297,7 +303,7 @@ $$;
 
 drop trigger if exists guard_profile_role on public.profiles;
 create trigger guard_profile_role
-before update of role on public.profiles
+before insert or update of role on public.profiles
 for each row
 execute function public.guard_profile_role();
 

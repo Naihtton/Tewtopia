@@ -36,7 +36,7 @@ export default async function AuthPage({ searchParams }: AuthPageProps) {
           </p>
           {params.error === 'confirm' && (
             <p className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              That confirmation link is invalid or expired.
+              We couldn&apos;t finish confirming here. Your email may already be confirmed — try logging in.
             </p>
           )}
           {/* key: remount the form when the mode in the URL changes (e.g. browser back). */}

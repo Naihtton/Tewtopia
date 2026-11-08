@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { missingTutorFields, normalizeTeachingLevels, TEACHING_LEVELS } from './tutor-visibility.ts';
+import { missingTutorFields, normalizeTeachingLevels, TEACHING_LEVELS, tutorListingStatus } from './tutor-visibility.ts';
 
 const complete = { displayName: 'Pim', hourlyRate: 500, subjects: ['Math'], teachingLevels: ['primary'] };
 
@@ -35,4 +35,22 @@ test('TEACHING_LEVELS order and labels', () => {
     ['primary', 'lower_secondary', 'upper_secondary', 'university', 'adult'],
   );
   assert.equal(TEACHING_LEVELS[1].label, 'Lower secondary (ม.ต้น)');
+});
+
+test('tutorListingStatus: private hides even a complete tutor', () => {
+  assert.deepEqual(tutorListingStatus({ ...complete, visibility: 'private' }), {
+    listed: false,
+    missing: [],
+    hiddenByPrivacy: true,
+  });
+});
+
+test('tutorListingStatus: public, matched_only and missing settings are listed when complete', () => {
+  for (const visibility of ['public', 'matched_only', null]) {
+    assert.deepEqual(tutorListingStatus({ ...complete, visibility }), { listed: true, missing: [], hiddenByPrivacy: false });
+  }
+});
+
+test('tutorListingStatus: incomplete is not listed', () => {
+  assert.equal(tutorListingStatus({ ...complete, hourlyRate: 0, visibility: 'public' }).listed, false);
 });
