@@ -32,7 +32,7 @@ export function Modal({ labelledBy, onClose, children }: ModalProps) {
       onClick={(event) => {
         if (event.target === event.currentTarget) dialogRef.current?.close();
       }}
-      className="m-auto w-[calc(100%-2rem)] max-w-2xl rounded-[1.75rem] bg-white p-0 text-ink shadow-[0_24px_60px_rgba(46,36,51,0.25)] backdrop:bg-ink/40 backdrop:backdrop-blur-sm"
+      className="m-auto w-[calc(100%-2rem)] max-w-2xl rounded-[1.75rem] bg-white p-0 text-ink outline-none shadow-[0_24px_60px_rgba(46,36,51,0.25)] backdrop:bg-ink/40 backdrop:backdrop-blur-sm"
     >
       <div className="max-h-[85vh] overflow-y-auto p-6 sm:p-7">
         <div className="mb-2 flex justify-end">
