@@ -1,4 +1,4 @@
-import type { OfferStatus } from '@/lib/requests';
+import type { OfferStatus, ScheduleSlot } from '@/lib/requests';
 import { createClient } from '@/lib/supabase/server';
 
 export type RequestCard = {
@@ -7,9 +7,11 @@ export type RequestCard = {
   teachingLevels: string[];
   teachingModes: string[];
   details: string;
-  schedule: string;
+  scheduleSlots: ScheduleSlot[];
   createdAt: string;
   offerCount: number;
+  // The student's display name (they're told it shows on the board).
+  studentName: string;
 };
 
 type RequestCardRow = {
@@ -18,17 +20,18 @@ type RequestCardRow = {
   teaching_levels: string[] | null;
   teaching_modes: string[] | null;
   details: string | null;
-  schedule: string | null;
+  schedule_slots: ScheduleSlot[] | null;
   created_at: string;
   offer_count: number | null;
+  student_name: string | null;
 };
 
-// Public board: reads only public_request_cards (no student identity, no prices).
+// Public board: reads only public_request_cards (display name only — no contacts, ids or prices).
 export async function listOpenRequests(): Promise<{ requests: RequestCard[]; error: string | null }> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('public_request_cards')
-    .select('id, subjects, teaching_levels, teaching_modes, details, schedule, created_at, offer_count')
+    .select('id, subjects, teaching_levels, teaching_modes, details, schedule_slots, created_at, offer_count, student_name')
     .order('created_at', { ascending: false })
     .returns<RequestCardRow[]>();
 
@@ -44,9 +47,10 @@ export async function listOpenRequests(): Promise<{ requests: RequestCard[]; err
       teachingLevels: row.teaching_levels ?? [],
       teachingModes: row.teaching_modes ?? [],
       details: row.details ?? '',
-      schedule: row.schedule ?? '',
+      scheduleSlots: row.schedule_slots ?? [],
       createdAt: row.created_at,
       offerCount: row.offer_count ?? 0,
+      studentName: row.student_name ?? 'Student',
     })),
     error: null,
   };

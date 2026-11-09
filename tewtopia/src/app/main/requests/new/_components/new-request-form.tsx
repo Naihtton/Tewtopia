@@ -1,9 +1,19 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { CONTACT_CHANNELS, hasAnyContact, normalizeContactDetails, type ContactChannel, type ContactDetails } from '@/lib/contact';
-import { DETAILS_MAX, SCHEDULE_MAX, TEACHING_MODES, validateRequestInput, type RequestInput } from '@/lib/requests';
+import {
+  DAYS,
+  DETAILS_MAX,
+  TEACHING_MODES,
+  TIME_OPTIONS,
+  validateRequestInput,
+  type Day,
+  type RequestInput,
+  type ScheduleSlot,
+} from '@/lib/requests';
 import { createClient } from '@/lib/supabase/client';
 import { TEACHING_LEVELS } from '@/lib/tutor-visibility';
 import { ui } from '@/lib/ui';
@@ -11,7 +21,85 @@ import { ui } from '@/lib/ui';
 type NewRequestFormProps = {
   subjects: string[];
   initialContacts: ContactDetails;
+  // Shown on the public board next to the request.
+  displayName: string;
 };
+
+type DayRow = { on: boolean; start: string; end: string };
+const DEFAULT_ROW: DayRow = { on: false, start: '16:00', end: '17:00' };
+
+function WeeklySchedule({
+  rows,
+  onChange,
+  error,
+}: {
+  rows: Record<Day, DayRow>;
+  onChange: (day: Day, row: DayRow) => void;
+  error?: string;
+}) {
+  return (
+    <fieldset>
+      <legend className={ui.label}>When can you study?</legend>
+      <p className="-mt-1 mb-3 text-xs text-muted">Tick the days that work, then set a time range for each.</p>
+      <div className="divide-y divide-line overflow-hidden rounded-2xl border border-line">
+        {DAYS.map(({ value, label }) => {
+          const row = rows[value];
+          return (
+            <div key={value} className={`flex flex-wrap items-center gap-3 px-4 py-2.5 ${row.on ? 'bg-primary-soft/50' : 'bg-white'}`}>
+              <label className="flex w-20 cursor-pointer items-center gap-2 text-sm font-bold text-ink">
+                <input
+                  type="checkbox"
+                  checked={row.on}
+                  onChange={(event) => onChange(value, { ...row, on: event.target.checked })}
+                  className="h-4 w-4 accent-cta"
+                />
+                {label}
+              </label>
+              <div className={`flex items-center gap-2 text-sm ${row.on ? '' : 'opacity-40'}`}>
+                <select
+                  aria-label={`${label} start time`}
+                  disabled={!row.on}
+                  value={row.start}
+                  onChange={(event) => onChange(value, { ...row, start: event.target.value })}
+                  className="rounded-xl border border-line bg-white px-2 py-1.5 text-ink outline-none focus:border-primary"
+                >
+                  {TIME_OPTIONS.slice(0, -1).map((time) => (
+                    <option key={time} value={time}>
+                      {time}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-muted">–</span>
+                <select
+                  aria-label={`${label} end time`}
+                  disabled={!row.on}
+                  value={row.end}
+                  onChange={(event) => onChange(value, { ...row, end: event.target.value })}
+                  className="rounded-xl border border-line bg-white px-2 py-1.5 text-ink outline-none focus:border-primary"
+                >
+                  {TIME_OPTIONS.slice(1).map((time) => (
+                    <option key={time} value={time}>
+                      {time}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {error && <p className="mt-2 text-xs font-semibold text-red-600">{error}</p>}
+    </fieldset>
+  );
+}
+
+function slotsFrom(rows: Record<Day, DayRow>): ScheduleSlot[] {
+  return DAYS.filter(({ value }) => rows[value].on).map(({ value }) => ({
+    day: value,
+    start: rows[value].start,
+    end: rows[value].end,
+  }));
+}
 
 function toggle(list: string[], value: string) {
   return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
@@ -54,15 +142,18 @@ function CheckboxGroup({
   );
 }
 
-export function NewRequestForm({ subjects, initialContacts }: NewRequestFormProps) {
+export function NewRequestForm({ subjects, initialContacts, displayName }: NewRequestFormProps) {
   const router = useRouter();
   const [form, setForm] = useState<RequestInput>({
     subjects: [],
     teachingLevels: [],
     teachingModes: [],
-    schedule: '',
+    scheduleSlots: [],
     details: '',
   });
+  const [days, setDays] = useState<Record<Day, DayRow>>(
+    () => Object.fromEntries(DAYS.map(({ value }) => [value, DEFAULT_ROW])) as Record<Day, DayRow>,
+  );
   const [contacts, setContacts] = useState<ContactDetails>(initialContacts);
   // Ask for contacts in the form only if none are saved yet.
   const [needsContacts] = useState(() => !hasAnyContact(initialContacts));
@@ -74,7 +165,7 @@ export function NewRequestForm({ subjects, initialContacts }: NewRequestFormProp
     event.preventDefault();
     setSubmitError(null);
 
-    const result = validateRequestInput(form);
+    const result = validateRequestInput({ ...form, scheduleSlots: slotsFrom(days) });
     const nextErrors: typeof errors = result.ok ? {} : { ...result.errors };
     const cleanContacts = normalizeContactDetails(contacts);
     if (needsContacts && !hasAnyContact(cleanContacts)) {
@@ -105,7 +196,7 @@ export function NewRequestForm({ subjects, initialContacts }: NewRequestFormProp
         p_subjects: value.subjects,
         p_teaching_levels: value.teachingLevels,
         p_details: value.details,
-        p_schedule: value.schedule,
+        p_schedule_slots: value.scheduleSlots,
         p_teaching_modes: value.teachingModes,
       });
       if (error) {
@@ -144,20 +235,11 @@ export function NewRequestForm({ subjects, initialContacts }: NewRequestFormProp
         error={errors.teachingModes}
       />
 
-      <div>
-        <label htmlFor="schedule" className={ui.label}>
-          When can you study?
-        </label>
-        <input
-          id="schedule"
-          value={form.schedule}
-          maxLength={SCHEDULE_MAX}
-          onChange={(event) => setForm((current) => ({ ...current, schedule: event.target.value }))}
-          className={ui.input}
-          placeholder="e.g. Sat–Sun afternoons, or weekday evenings after 6pm"
-        />
-        {errors.schedule && <p className="mt-2 text-xs font-semibold text-red-600">{errors.schedule}</p>}
-      </div>
+      <WeeklySchedule
+        rows={days}
+        onChange={(day, row) => setDays((current) => ({ ...current, [day]: row }))}
+        error={errors.scheduleSlots}
+      />
 
       <div>
         <label htmlFor="details" className={ui.label}>
@@ -203,6 +285,14 @@ export function NewRequestForm({ subjects, initialContacts }: NewRequestFormProp
           {errors.contacts && <p className="mt-2 text-xs font-semibold text-red-600">{errors.contacts}</p>}
         </fieldset>
       )}
+
+      <p className="text-xs text-muted">
+        Your request is shown on the board as <span className="font-bold text-ink">{displayName || 'Student'}</span>.
+        Your contact details stay hidden until you accept an offer.{' '}
+        <Link href="/main/profile" className="font-bold text-primary-deep underline underline-offset-2">
+          Change display name
+        </Link>
+      </p>
 
       {submitError && (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{submitError}</div>

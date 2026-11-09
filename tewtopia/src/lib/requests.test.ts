@@ -1,12 +1,23 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { OFFER_STATUS_LABEL, offerActions, TEACHING_MODES, validateRequestInput } from './requests.ts';
+import {
+  DAYS,
+  formatSchedule,
+  OFFER_STATUS_LABEL,
+  offerActions,
+  TEACHING_MODES,
+  TIME_OPTIONS,
+  validateRequestInput,
+} from './requests.ts';
 
 const valid = {
   subjects: ['Mathematics'],
   teachingLevels: ['primary'],
   teachingModes: ['online'],
-  schedule: '  Sat-Sun afternoon ',
+  scheduleSlots: [
+    { day: 'sat', start: '09:00', end: '11:00' },
+    { day: 'mon', start: '15:30', end: '16:30' },
+  ],
   details: ' Derivatives ',
 };
 
@@ -25,15 +36,23 @@ test('TEACHING_MODES values and labels', () => {
 test('validateRequestInput trims a valid input', () => {
   assert.deepEqual(validateRequestInput(valid), {
     ok: true,
-    value: { ...valid, schedule: 'Sat-Sun afternoon', details: 'Derivatives' },
+    // slots come back sorted Mon→Sun
+    value: {
+      ...valid,
+      scheduleSlots: [
+        { day: 'mon', start: '15:30', end: '16:30' },
+        { day: 'sat', start: '09:00', end: '11:00' },
+      ],
+      details: 'Derivatives',
+    },
   });
 });
 
 test('validateRequestInput reports each problem', () => {
-  const result = validateRequestInput({ subjects: [], teachingLevels: [], teachingModes: [], schedule: '  ', details: '' });
+  const result = validateRequestInput({ subjects: [], teachingLevels: [], teachingModes: [], scheduleSlots: [], details: '' });
   assert.equal(result.ok, false);
   assert.deepEqual(Object.keys(result.ok ? {} : result.errors).sort(), [
-    'schedule',
+    'scheduleSlots',
     'subjects',
     'teachingLevels',
     'teachingModes',
@@ -45,11 +64,10 @@ test('validateRequestInput length limits and unknown values', () => {
     const result = validateRequestInput({ ...valid, ...patch });
     return result.ok ? [] : Object.keys(result.errors);
   };
-  assert.deepEqual(errorsFor({ schedule: 'x'.repeat(201) }), ['schedule']);
   assert.deepEqual(errorsFor({ details: 'x'.repeat(1001) }), ['details']);
   assert.deepEqual(errorsFor({ teachingModes: ['weekend'] }), ['teachingModes']);
   assert.deepEqual(errorsFor({ teachingLevels: ['kindergarten'] }), ['teachingLevels']);
-  assert.deepEqual(errorsFor({ schedule: 'x'.repeat(200), details: 'x'.repeat(1000) }), []);
+  assert.deepEqual(errorsFor({ details: 'x'.repeat(1000) }), []);
 });
 
 test('offerActions for the student', () => {
@@ -85,4 +103,42 @@ test('OFFER_STATUS_LABEL', () => {
     closed: 'Closed',
     withdrawn: 'Withdrawn',
   });
+});
+
+test('DAYS and TIME_OPTIONS', () => {
+  assert.deepEqual(DAYS.map((day) => day.value), ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']);
+  assert.equal(TIME_OPTIONS[0], '06:00');
+  assert.equal(TIME_OPTIONS[1], '06:30');
+  assert.equal(TIME_OPTIONS.at(-1), '22:00');
+});
+
+test('schedule slots: bad day, off-grid time, end not after start, duplicate day', () => {
+  const errorsFor = (scheduleSlots: { day: string; start: string; end: string }[]) => {
+    const result = validateRequestInput({ ...valid, scheduleSlots });
+    return result.ok ? [] : Object.keys(result.errors);
+  };
+  assert.deepEqual(errorsFor([{ day: 'fun', start: '09:00', end: '10:00' }]), ['scheduleSlots']);
+  assert.deepEqual(errorsFor([{ day: 'mon', start: '09:15', end: '10:00' }]), ['scheduleSlots']);
+  assert.deepEqual(errorsFor([{ day: 'mon', start: '05:30', end: '10:00' }]), ['scheduleSlots']);
+  assert.deepEqual(errorsFor([{ day: 'mon', start: '10:00', end: '10:00' }]), ['scheduleSlots']);
+  assert.deepEqual(errorsFor([{ day: 'mon', start: '11:00', end: '10:00' }]), ['scheduleSlots']);
+  assert.deepEqual(
+    errorsFor([
+      { day: 'mon', start: '09:00', end: '10:00' },
+      { day: 'mon', start: '15:00', end: '16:00' },
+    ]),
+    ['scheduleSlots'],
+  );
+  assert.deepEqual(errorsFor([{ day: 'sun', start: '21:30', end: '22:00' }]), []);
+});
+
+test('formatSchedule', () => {
+  assert.equal(
+    formatSchedule([
+      { day: 'sat', start: '09:00', end: '11:00' },
+      { day: 'mon', start: '15:30', end: '16:30' },
+    ]),
+    'Mon 15:30–16:30 · Sat 09:00–11:00',
+  );
+  assert.equal(formatSchedule([]), '');
 });

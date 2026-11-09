@@ -1,4 +1,4 @@
-import type { OfferStatus, RequestStatus } from '@/lib/requests';
+import type { OfferStatus, RequestStatus, ScheduleSlot } from '@/lib/requests';
 import { createClient } from '@/lib/supabase/server';
 import { getPublicTutorCardsByIds, type BrowseTutorCard } from '@/lib/tutor-profiles';
 
@@ -9,7 +9,7 @@ export type RequestDetails = {
   teachingLevels: string[];
   teachingModes: string[];
   details: string;
-  schedule: string;
+  scheduleSlots: ScheduleSlot[];
   createdAt: string;
 };
 
@@ -38,11 +38,11 @@ type RequestRow = {
   teaching_levels: string[];
   teaching_modes: string[];
   details: string;
-  schedule: string;
+  schedule_slots: ScheduleSlot[];
   created_at: string;
 };
 
-const REQUEST_COLUMNS = 'id, status, subjects, teaching_levels, teaching_modes, details, schedule, created_at';
+const REQUEST_COLUMNS = 'id, status, subjects, teaching_levels, teaching_modes, details, schedule_slots, created_at';
 
 function mapRequest(row: RequestRow): RequestDetails {
   return {
@@ -52,7 +52,7 @@ function mapRequest(row: RequestRow): RequestDetails {
     teachingLevels: row.teaching_levels,
     teachingModes: row.teaching_modes,
     details: row.details,
-    schedule: row.schedule,
+    scheduleSlots: row.schedule_slots ?? [],
     createdAt: row.created_at,
   };
 }

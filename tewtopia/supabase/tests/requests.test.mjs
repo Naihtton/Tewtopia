@@ -28,7 +28,9 @@ async function listTutor(id) {
   `);
 }
 
-const validRequest = [['Mathematics'], ['primary'], 'Derivatives for midterm', 'Sat-Sun afternoon', ['online']];
+const slots = (...list) => JSON.stringify(list);
+const validSlots = slots({ day: 'mon', start: '15:30', end: '16:30' }, { day: 'sat', start: '09:00', end: '11:00' });
+const validRequest = [['Mathematics'], ['primary'], 'Derivatives for midterm', validSlots, ['online']];
 
 before(async () => {
   db = await freshDb();
@@ -55,15 +57,21 @@ test('create_request: students with a contact only, fields validated', async () 
 
   await as(db, 'authenticated', S);
   for (const bad of [
-    [[], ['primary'], '', 'Sat', ['online']],
-    [['Mathematics'], [], '', 'Sat', ['online']],
-    [['Mathematics'], ['primary'], '', 'Sat', []],
-    [['Mathematics'], ['primary'], '', '   ', ['online']],
-    [['Mathematics'], ['primary'], '', 'x'.repeat(201), ['online']],
-    [['Mathematics'], ['primary'], 'x'.repeat(1001), 'Sat', ['online']],
-    [['Mathematics'], ['weekend'], '', 'Sat', ['online']],
-    [['Mathematics'], ['primary'], '', 'Sat', ['weekend']],
-    [['Basket weaving'], ['primary'], '', 'Sat', ['online']],
+    [[], ['primary'], '', validSlots, ['online']],
+    [['Mathematics'], [], '', validSlots, ['online']],
+    [['Mathematics'], ['primary'], '', validSlots, []],
+    [['Mathematics'], ['primary'], 'x'.repeat(1001), validSlots, ['online']],
+    [['Mathematics'], ['weekend'], '', validSlots, ['online']],
+    [['Mathematics'], ['primary'], '', validSlots, ['weekend']],
+    [['Basket weaving'], ['primary'], '', validSlots, ['online']],
+    // schedule slots
+    [['Mathematics'], ['primary'], '', '[]', ['online']],
+    [['Mathematics'], ['primary'], '', slots({ day: 'fun', start: '09:00', end: '10:00' }), ['online']],
+    [['Mathematics'], ['primary'], '', slots({ day: 'mon', start: '09:15', end: '10:00' }), ['online']],
+    [['Mathematics'], ['primary'], '', slots({ day: 'mon', start: '05:30', end: '10:00' }), ['online']],
+    [['Mathematics'], ['primary'], '', slots({ day: 'mon', start: '10:00', end: '10:00' }), ['online']],
+    [['Mathematics'], ['primary'], '', slots({ day: 'mon', start: '09:00', end: '10:00' }, { day: 'mon', start: '11:00', end: '12:00' }), ['online']],
+    [['Mathematics'], ['primary'], '', '{"day":"mon"}', ['online']],
   ]) {
     assert.ok(await errorOf(db, `select public.create_request($1, $2, $3, $4, $5)`, bad), JSON.stringify(bad));
   }
@@ -83,15 +91,20 @@ test('direct writes are blocked; owners read their own rows', async () => {
   assert.equal((await rows(db, `select * from public.student_requests`)).length, 0, 'tutor without an offer cannot read the request row');
 });
 
-test('public_request_cards: open posts, no student identity, anon readable', async () => {
+test('public_request_cards: open posts with the student display name only, anon readable', async () => {
   await as(db, 'anon');
   const cards = await rows(db, `select * from public.public_request_cards`);
   assert.equal(cards.length, 1);
   const card = cards[0];
   assert.equal(card.id, requestId);
   assert.equal(card.offer_count, 0);
+  assert.equal(card.student_name, 'Nok');
+  assert.deepEqual(card.schedule_slots, [
+    { day: 'mon', start: '15:30', end: '16:30' },
+    { day: 'sat', start: '09:00', end: '11:00' },
+  ]);
   for (const key of Object.keys(card)) {
-    assert.equal(/student|name|email|contact/.test(key), false, `column ${key} must not expose the student`);
+    assert.equal(/student_user_id|email|contact|phone|line/.test(key), false, `column ${key} must not expose the student`);
   }
 });
 

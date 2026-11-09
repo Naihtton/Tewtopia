@@ -26,7 +26,11 @@ export default async function NewRequestPage() {
           Describe what you need. Tutors on the request board will send you offers with their price.
         </p>
       </div>
-      <NewRequestForm subjects={(subjectRows ?? []).map((row) => row.name)} initialContacts={result.profile.contacts} />
+      <NewRequestForm
+        subjects={(subjectRows ?? []).map((row) => row.name)}
+        initialContacts={result.profile.contacts}
+        displayName={result.profile.displayName}
+      />
     </div>
   );
 }

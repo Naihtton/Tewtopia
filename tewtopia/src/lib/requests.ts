@@ -12,16 +12,63 @@ export const TEACHING_MODES: readonly { value: TeachingMode; label: string }[] =
   { value: 'hybrid', label: 'Hybrid' },
 ];
 
-export const SCHEDULE_MAX = 200;
 export const DETAILS_MAX = 1000;
+
+export type Day = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+
+export const DAYS: readonly { value: Day; label: string }[] = [
+  { value: 'mon', label: 'Mon' },
+  { value: 'tue', label: 'Tue' },
+  { value: 'wed', label: 'Wed' },
+  { value: 'thu', label: 'Thu' },
+  { value: 'fri', label: 'Fri' },
+  { value: 'sat', label: 'Sat' },
+  { value: 'sun', label: 'Sun' },
+];
+
+/** 06:00, 06:30, … 22:00 — the choices for start/end times. */
+export const TIME_OPTIONS: readonly string[] = Array.from({ length: (22 - 6) * 2 + 1 }, (_, index) => {
+  const minutes = 6 * 60 + index * 30;
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${minutes % 60 === 0 ? '00' : '30'}`;
+});
+
+/** One time range on one weekday. Same shape as student_requests.schedule_slots in the DB. */
+export type ScheduleSlot = { day: string; start: string; end: string };
 
 export type RequestInput = {
   subjects: string[];
   teachingLevels: string[];
   teachingModes: string[];
-  schedule: string;
+  scheduleSlots: ScheduleSlot[];
   details: string;
 };
+
+const DAY_ORDER = new Map<string, number>(DAYS.map((day, index) => [day.value, index]));
+const TIME_SET = new Set(TIME_OPTIONS);
+
+function sortSlots(slots: ScheduleSlot[]) {
+  return [...slots].sort((a, b) => (DAY_ORDER.get(a.day) ?? 99) - (DAY_ORDER.get(b.day) ?? 99));
+}
+
+function slotsError(slots: ScheduleSlot[]): string | null {
+  if (slots.length === 0) return 'Pick at least one day and time.';
+  const seen = new Set<string>();
+  for (const slot of slots) {
+    if (!DAY_ORDER.has(slot.day)) return 'Unknown day.';
+    if (seen.has(slot.day)) return 'One time range per day.';
+    seen.add(slot.day);
+    if (!TIME_SET.has(slot.start) || !TIME_SET.has(slot.end)) return 'Times must be between 06:00 and 22:00, on the half hour.';
+    if (slot.end <= slot.start) return 'End time must be after start time.';
+  }
+  return null;
+}
+
+/** "Mon 15:30–16:30 · Sat 09:00–11:00" */
+export function formatSchedule(slots: ScheduleSlot[]): string {
+  return sortSlots(slots)
+    .map((slot) => `${DAYS.find((day) => day.value === slot.day)?.label ?? slot.day} ${slot.start}–${slot.end}`)
+    .join(' · ');
+}
 
 type RequestField = keyof RequestInput;
 
@@ -29,7 +76,6 @@ export function validateRequestInput(
   input: RequestInput,
 ): { ok: true; value: RequestInput } | { ok: false; errors: Partial<Record<RequestField, string>> } {
   const errors: Partial<Record<RequestField, string>> = {};
-  const schedule = input.schedule.trim();
   const details = input.details.trim();
   const modeValues = new Set<string>(TEACHING_MODES.map((mode) => mode.value));
 
@@ -44,14 +90,14 @@ export function validateRequestInput(
   } else if (input.teachingModes.some((mode) => !modeValues.has(mode))) {
     errors.teachingModes = 'Unknown learning mode.';
   }
-  if (schedule.length === 0) errors.schedule = 'Tell tutors when you can study.';
-  else if (schedule.length > SCHEDULE_MAX) errors.schedule = `Keep it under ${SCHEDULE_MAX} characters.`;
+  const scheduleError = slotsError(input.scheduleSlots);
+  if (scheduleError) errors.scheduleSlots = scheduleError;
   if (details.length > DETAILS_MAX) errors.details = `Keep it under ${DETAILS_MAX} characters.`;
 
   if (Object.keys(errors).length > 0) {
     return { ok: false, errors };
   }
-  return { ok: true, value: { ...input, schedule, details } };
+  return { ok: true, value: { ...input, scheduleSlots: sortSlots(input.scheduleSlots), details } };
 }
 
 export type OfferStatus = 'pending' | 'accepted' | 'declined' | 'deal_done' | 'closed' | 'withdrawn';

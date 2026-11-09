@@ -767,7 +767,10 @@ create table if not exists public.student_requests (
   teaching_levels text[] not null,
   teaching_modes text[] not null,
   details text not null default '',
-  schedule text not null,
+  -- legacy free-text schedule (unused; replaced by schedule_slots)
+  schedule text not null default '',
+  -- [{ "day": "mon", "start": "15:30", "end": "16:30" }, ...] — validated by valid_schedule_slots()
+  schedule_slots jsonb not null default '[]',
   status text not null default 'open' check (status in ('open', 'closed', 'cancelled')),
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
@@ -777,10 +780,43 @@ create table if not exists public.student_requests (
     and cardinality(teaching_modes) > 0
     and teaching_levels <@ array['primary', 'lower_secondary', 'upper_secondary', 'university', 'adult']::text[]
     and teaching_modes <@ array['online', 'in_person', 'group', 'hybrid']::text[]
-    and char_length(btrim(schedule)) between 1 and 200
     and char_length(details) <= 1000
   )
 );
+
+-- Upgrades for databases created before structured schedules.
+alter table public.student_requests add column if not exists schedule_slots jsonb not null default '[]';
+alter table public.student_requests alter column schedule set default '';
+alter table public.student_requests drop constraint if exists student_requests_fields_check;
+alter table public.student_requests
+add constraint student_requests_fields_check check (
+  cardinality(subjects) > 0
+  and cardinality(teaching_levels) > 0
+  and cardinality(teaching_modes) > 0
+  and teaching_levels <@ array['primary', 'lower_secondary', 'upper_secondary', 'university', 'adult']::text[]
+  and teaching_modes <@ array['online', 'in_person', 'group', 'hybrid']::text[]
+  and char_length(details) <= 1000
+  and jsonb_typeof(schedule_slots) = 'array'
+);
+
+-- One range per weekday, times on the half hour between 06:00 and 22:00, end after start.
+-- Mirrors validateRequestInput() in src/lib/requests.ts.
+create or replace function public.valid_schedule_slots(p_slots jsonb)
+returns boolean language sql immutable as $$
+  select
+    jsonb_typeof(p_slots) = 'array'
+    and jsonb_array_length(p_slots) between 1 and 7
+    and not exists (
+      select 1
+      from jsonb_array_elements(p_slots) as slot
+      where jsonb_typeof(slot) <> 'object'
+        or coalesce(slot->>'day', '') not in ('mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun')
+        or coalesce(slot->>'start', '') !~ '^(0[6-9]|1[0-9]|2[0-1]):(00|30)$|^22:00$'
+        or coalesce(slot->>'end', '') !~ '^(0[6-9]|1[0-9]|2[0-1]):(00|30)$|^22:00$'
+        or slot->>'end' <= slot->>'start'
+    )
+    and (select count(distinct slot->>'day') from jsonb_array_elements(p_slots) as slot) = jsonb_array_length(p_slots);
+$$;
 
 create index if not exists student_requests_student_idx on public.student_requests (student_user_id);
 
@@ -846,8 +882,10 @@ create policy "Students can view offers on own requests"
 on public.request_offers for select to authenticated
 using (public.is_request_owner(request_id));
 
--- Public board: open posts only, nothing that identifies the student, and only
--- the number of offers (never their prices). Runs with owner rights, like public_tutor_cards.
+-- Public board: open posts only. Shows the student's display name (chosen by them,
+-- and they are told it appears here) but never contacts, ids or offer prices — only
+-- the number of offers. Runs with owner rights, like public_tutor_cards.
+-- New columns are appended at the end so "create or replace" keeps working.
 create or replace view public.public_request_cards as
 select
   r.id,
@@ -861,18 +899,24 @@ select
     select count(*)::int
     from public.request_offers o
     where o.request_id = r.id and o.status in ('pending', 'accepted')
-  ) as offer_count
+  ) as offer_count,
+  r.schedule_slots,
+  coalesce(nullif(btrim(p.display_name), ''), 'Student') as student_name
 from public.student_requests r
+join public.profiles p on p.id = r.student_user_id
 where r.status = 'open';
 
 revoke all on public.public_request_cards from public, anon, authenticated;
 grant select on public.public_request_cards to anon, authenticated;
 
+-- Signature changed (free-text schedule → schedule_slots); drop the old overload.
+drop function if exists public.create_request(text[], text[], text, text, text[]);
+
 create or replace function public.create_request(
   p_subjects text[],
   p_teaching_levels text[],
   p_details text,
-  p_schedule text,
+  p_schedule_slots jsonb,
   p_teaching_modes text[]
 )
 returns uuid language plpgsql security definer set search_path = public as $$
@@ -896,9 +940,12 @@ begin
   if exists (select 1 from unnest(p_subjects) s where s not in (select name from public.subjects)) then
     raise exception 'Unknown subject';
   end if;
+  if p_schedule_slots is null or not public.valid_schedule_slots(p_schedule_slots) then
+    raise exception 'Pick at least one day with a valid time range';
+  end if;
 
-  insert into public.student_requests (student_user_id, subjects, teaching_levels, teaching_modes, details, schedule)
-  values (uid, p_subjects, p_teaching_levels, p_teaching_modes, btrim(coalesce(p_details, '')), btrim(coalesce(p_schedule, '')))
+  insert into public.student_requests (student_user_id, subjects, teaching_levels, teaching_modes, details, schedule_slots)
+  values (uid, p_subjects, p_teaching_levels, p_teaching_modes, btrim(coalesce(p_details, '')), p_schedule_slots)
   returning id into new_id;
 
   return new_id;
@@ -1096,7 +1143,7 @@ $$;
 
 revoke all on function public.is_request_owner(uuid) from public, anon;
 revoke all on function public.has_offer_on(uuid) from public, anon;
-revoke all on function public.create_request(text[], text[], text, text, text[]) from public, anon;
+revoke all on function public.create_request(text[], text[], text, jsonb, text[]) from public, anon;
 revoke all on function public.cancel_request(uuid) from public, anon;
 revoke all on function public.submit_offer(uuid, integer) from public, anon;
 revoke all on function public.withdraw_offer(uuid) from public, anon;
@@ -1108,7 +1155,7 @@ revoke all on function public.my_attention_counts() from public, anon;
 
 grant execute on function public.is_request_owner(uuid) to authenticated;
 grant execute on function public.has_offer_on(uuid) to authenticated;
-grant execute on function public.create_request(text[], text[], text, text, text[]) to authenticated;
+grant execute on function public.create_request(text[], text[], text, jsonb, text[]) to authenticated;
 grant execute on function public.cancel_request(uuid) to authenticated;
 grant execute on function public.submit_offer(uuid, integer) to authenticated;
 grant execute on function public.withdraw_offer(uuid) to authenticated;
