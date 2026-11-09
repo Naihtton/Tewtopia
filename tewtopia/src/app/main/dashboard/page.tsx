@@ -1,10 +1,7 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getCurrentUserProfile } from '@/lib/profiles';
-import { getCurrentUserSettings } from '@/lib/settings';
-import { hasAnyContact } from '@/lib/tutor-contact';
-import { getCurrentTutorProfile } from '@/lib/tutor-profiles';
-import { tutorSetupChecklist } from '@/lib/tutor-visibility';
+import { getCurrentTutorChecklist } from '@/lib/tutor-listing';
 import { ui } from '@/lib/ui';
 
 function buildChecklist(profile: {
@@ -44,19 +41,7 @@ export default async function DashboardPage() {
   const isTutor = profile.role === 'tutor';
 
   // Tutors: the checklist is the Find tutors listing rule, so "done" means students can see you.
-  let checklist = buildChecklist(profile);
-  if (isTutor) {
-    const [tutorResult, settingsResult] = await Promise.all([getCurrentTutorProfile(), getCurrentUserSettings()]);
-    const tutorProfile = tutorResult?.tutorProfile;
-    checklist = tutorSetupChecklist({
-      displayName: profile.displayName,
-      subjects: profile.preferredSubjects,
-      hourlyRate: tutorProfile?.hourlyRate ?? null,
-      teachingLevels: tutorProfile?.teachingLevels ?? [],
-      hasContact: tutorProfile ? hasAnyContact(tutorProfile.contacts) : false,
-      visibility: settingsResult?.settings.profileVisibility ?? null,
-    });
-  }
+  const checklist = isTutor ? await getCurrentTutorChecklist(profile) : buildChecklist(profile);
 
   const completedCount = checklist.filter((item) => item.done).length;
   const isSetupComplete = completedCount === checklist.length;
