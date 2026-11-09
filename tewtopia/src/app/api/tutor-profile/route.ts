@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getCurrentUserProfile } from '@/lib/profiles';
 import { parseCommaSeparatedList, syncTutorTeachingModes } from '@/lib/profile-sync';
 import { createClient } from '@/lib/supabase/server';
+import { normalizeTeachingLevels } from '@/lib/tutor-visibility';
 
 function parseNumber(value: unknown) {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -30,7 +31,7 @@ export async function GET() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('tutor_profiles')
-    .select('id, headline, hourly_rate, years_experience, teaching_modes, about, updated_at')
+    .select('id, headline, hourly_rate, years_experience, teaching_modes, teaching_levels, about, updated_at')
     .eq('id', result.profile.id)
     .maybeSingle();
 
@@ -45,6 +46,7 @@ export async function GET() {
       hourly_rate: null,
       years_experience: null,
       teaching_modes: [],
+      teaching_levels: [],
       about: '',
       updated_at: null,
     },
@@ -67,6 +69,7 @@ export async function PATCH(request: Request) {
     hourlyRate?: unknown;
     yearsExperience?: unknown;
     teachingModes?: unknown;
+    teachingLevels?: unknown;
     about?: unknown;
   };
 
@@ -76,6 +79,7 @@ export async function PATCH(request: Request) {
     hourly_rate: parseNumber(body.hourlyRate),
     years_experience: parseNumber(body.yearsExperience),
     teaching_modes: parseCommaSeparatedList(body.teachingModes),
+    teaching_levels: normalizeTeachingLevels(body.teachingLevels),
     about: typeof body.about === 'string' ? body.about.trim() : '',
   };
 
@@ -83,7 +87,7 @@ export async function PATCH(request: Request) {
   const { data, error } = await supabase
     .from('tutor_profiles')
     .upsert(payload, { onConflict: 'id' })
-    .select('id, headline, hourly_rate, years_experience, teaching_modes, about, updated_at')
+    .select('id, headline, hourly_rate, years_experience, teaching_modes, teaching_levels, about, updated_at')
     .single();
 
   if (error) {

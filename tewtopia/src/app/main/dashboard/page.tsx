@@ -47,7 +47,7 @@ export default async function DashboardPage() {
     : 'Your student workspace is ready for tutor matching, notes, and learning materials.';
   const primaryAction = isTutor
     ? { href: '/main/tutor-profile', label: 'Edit Tutor Profile' }
-    : { href: '/main/tutors', label: 'Browse Tutors' };
+    : { href: '/tutors', label: 'Browse Tutors' };
   const secondaryAction = isTutor
     ? { href: '/main/settings', label: 'Review Visibility Settings' }
     : { href: '/main/profile', label: 'Update Learning Preferences' };

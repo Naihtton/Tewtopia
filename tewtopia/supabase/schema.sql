@@ -83,7 +83,7 @@ create policy "Users can insert own roles"
 on public.user_roles
 for insert
 to authenticated
-with check ((select auth.uid()) = user_id);
+with check ((select auth.uid()) = user_id and role in ('student', 'tutor'));
 
 drop policy if exists "Users can update own roles" on public.user_roles;
 create policy "Users can update own roles"
@@ -91,7 +91,7 @@ on public.user_roles
 for update
 to authenticated
 using ((select auth.uid()) = user_id)
-with check ((select auth.uid()) = user_id);
+with check ((select auth.uid()) = user_id and role in ('student', 'tutor'));
 
 -- Keeps user_roles in step with profiles.role. Runs as security definer because
 -- user_roles has no delete policy: users must not be able to drop roles themselves.
@@ -173,12 +173,9 @@ to authenticated
 using ((select auth.uid()) = id)
 with check ((select auth.uid()) = id);
 
+-- Removed: let any signed-in user read other users' full settings rows.
+-- Public tutor data is served only through public_tutor_cards (below).
 drop policy if exists "Authenticated users can view public settings rows" on public.user_settings;
-create policy "Authenticated users can view public settings rows"
-on public.user_settings
-for select
-to authenticated
-using (profile_visibility = 'public');
 
 -- Student-specific profile
 create table if not exists public.student_profiles (
@@ -267,34 +264,117 @@ to authenticated
 using ((select auth.uid()) = id)
 with check ((select auth.uid()) = id);
 
-drop policy if exists "Authenticated users can view public tutor cards" on public.tutor_profiles;
-create policy "Authenticated users can view public tutor cards"
-on public.tutor_profiles
-for select
-to authenticated
-using (
-  exists (
-    select 1
-    from public.user_settings us
-    where us.id = tutor_profiles.id
-      and us.profile_visibility = 'public'
-  )
-);
+alter table public.tutor_profiles
+add column if not exists teaching_levels text[] not null default '{}';
 
+alter table public.tutor_profiles drop constraint if exists tutor_profiles_teaching_levels_check;
+alter table public.tutor_profiles
+add constraint tutor_profiles_teaching_levels_check
+check (teaching_levels <@ array['primary', 'lower_secondary', 'upper_secondary', 'university', 'adult']::text[]);
+
+-- Removed: these exposed whole profiles rows (including email) to any signed-in
+-- user. With open sign-up anyone can be "authenticated", so public tutor data is
+-- served only through public_tutor_cards (below).
+drop policy if exists "Authenticated users can view public tutor cards" on public.tutor_profiles;
 drop policy if exists "Authenticated users can view public tutor profiles" on public.profiles;
-create policy "Authenticated users can view public tutor profiles"
-on public.profiles
-for select
-to authenticated
-using (
-  role = 'tutor'
-  and exists (
-    select 1
-    from public.user_settings us
-    where us.id = profiles.id
-      and us.profile_visibility = 'public'
-  )
-);
+
+-- Users may not make themselves admin (on insert or update) or demote an admin
+-- through the API. Only the service role (server-side admin tooling) can.
+create or replace function public.guard_profile_role()
+returns trigger
+language plpgsql
+as $$
+begin
+  if coalesce(auth.role(), '') = 'service_role' then
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.role = 'admin' then
+      raise exception 'role change not allowed';
+    end if;
+  elsif old.role is distinct from new.role and (old.role = 'admin' or new.role = 'admin') then
+    raise exception 'role change not allowed';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists guard_profile_role on public.profiles;
+create trigger guard_profile_role
+before insert or update of role on public.profiles
+for each row
+execute function public.guard_profile_role();
+
+-- Create the app rows for every new auth user from sign-up metadata.
+-- Only 'student' or 'tutor' are accepted; anything else becomes 'student'.
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  signup_role text := case when new.raw_user_meta_data->>'role' = 'tutor' then 'tutor' else 'student' end;
+  signup_name text := coalesce(btrim(new.raw_user_meta_data->>'display_name'), '');
+begin
+  insert into public.profiles (id, email, display_name, role)
+  values (new.id, coalesce(new.email, ''), signup_name, signup_role)
+  on conflict (id) do nothing;
+
+  if signup_role = 'tutor' then
+    insert into public.user_settings (id, profile_visibility)
+    values (new.id, 'public')
+    on conflict (id) do nothing;
+
+    insert into public.tutor_profiles (id)
+    values (new.id)
+    on conflict (id) do nothing;
+  else
+    insert into public.user_settings (id)
+    values (new.id)
+    on conflict (id) do nothing;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+after insert on auth.users
+for each row
+execute function public.handle_new_user();
+
+-- The only public window onto tutors: safe columns, no email.
+-- Deliberately NOT security_invoker: it runs with the owner's rights so anon can
+-- read it without any anon policy on profiles / user_settings / tutor_profiles.
+-- Listing rule mirrors src/lib/tutor-visibility.ts (missingTutorFields).
+create or replace view public.public_tutor_cards as
+select
+  p.id,
+  p.display_name,
+  t.headline,
+  t.about,
+  p.preferred_subjects as subjects,
+  t.teaching_levels,
+  t.teaching_modes,
+  t.hourly_rate,
+  t.years_experience,
+  p.bio
+from public.profiles p
+join public.tutor_profiles t on t.id = p.id
+left join public.user_settings s on s.id = p.id
+where p.role = 'tutor'
+  and btrim(coalesce(p.display_name, '')) <> ''
+  and t.hourly_rate > 0
+  and cardinality(p.preferred_subjects) > 0
+  and cardinality(t.teaching_levels) > 0
+  and coalesce(s.profile_visibility, 'public') <> 'private';
+
+revoke all on public.public_tutor_cards from public, anon, authenticated;
+grant select on public.public_tutor_cards to anon, authenticated;
 
 -- Subject taxonomy
 create table if not exists public.subjects (

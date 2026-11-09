@@ -1,14 +1,22 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import type { UserProfile } from '@/lib/profiles';
 import type { TutorProfile } from '@/lib/tutor-profiles';
+import {
+  tutorListingStatus,
+  normalizeTeachingLevels,
+  TEACHING_LEVELS,
+  type TeachingLevel,
+} from '@/lib/tutor-visibility';
 import { ui } from '@/lib/ui';
 
 type TutorProfileFormProps = {
   profile: UserProfile;
   tutorProfile: TutorProfile;
   initialError: string | null;
+  visibility: string | null;
 };
 
 type TutorProfileState = {
@@ -16,6 +24,7 @@ type TutorProfileState = {
   hourlyRate: string;
   yearsExperience: string;
   teachingModes: string;
+  teachingLevels: TeachingLevel[];
   about: string;
   updatedAt: string | null;
 };
@@ -26,6 +35,7 @@ function toFormState(tutorProfile: TutorProfile): TutorProfileState {
     hourlyRate: tutorProfile.hourlyRate?.toString() ?? '',
     yearsExperience: tutorProfile.yearsExperience?.toString() ?? '',
     teachingModes: tutorProfile.teachingModes.join(', '),
+    teachingLevels: tutorProfile.teachingLevels,
     about: tutorProfile.about,
     updatedAt: tutorProfile.updatedAt,
   };
@@ -47,17 +57,29 @@ function addMode(currentValue: string, mode: string) {
   return [...items, mode].join(', ');
 }
 
-export function TutorProfileForm({ profile, tutorProfile, initialError }: TutorProfileFormProps) {
+export function TutorProfileForm({ profile, tutorProfile, initialError, visibility }: TutorProfileFormProps) {
   const [form, setForm] = useState<TutorProfileState>(() => toFormState(tutorProfile));
   const [error, setError] = useState<string | null>(initialError);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const completedCount = [
-    form.headline.trim().length > 0,
-    form.teachingModes.trim().length > 0,
-    form.about.trim().length > 0,
-    form.hourlyRate.trim().length > 0,
-  ].filter(Boolean).length;
+  // Mirrors the public_tutor_cards view, using what is currently on screen.
+  const { listed, missing, hiddenByPrivacy } = tutorListingStatus({
+    displayName: profile.displayName,
+    hourlyRate: form.hourlyRate.trim() === '' ? null : Number(form.hourlyRate),
+    subjects: profile.preferredSubjects,
+    teachingLevels: form.teachingLevels,
+    visibility,
+  });
+  const missingInProfile = missing.includes('display name') || missing.includes('subjects');
+
+  function toggleLevel(level: TeachingLevel) {
+    setForm((current) => ({
+      ...current,
+      teachingLevels: current.teachingLevels.includes(level)
+        ? current.teachingLevels.filter((item) => item !== level)
+        : normalizeTeachingLevels([...current.teachingLevels, level]),
+    }));
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -79,6 +101,7 @@ export function TutorProfileForm({ profile, tutorProfile, initialError }: TutorP
           hourly_rate: number | null;
           years_experience: number | null;
           teaching_modes: string[] | null;
+          teaching_levels: string[] | null;
           about: string | null;
           updated_at: string | null;
         };
@@ -94,6 +117,7 @@ export function TutorProfileForm({ profile, tutorProfile, initialError }: TutorP
         hourlyRate: data.tutorProfile.hourly_rate?.toString() ?? '',
         yearsExperience: data.tutorProfile.years_experience?.toString() ?? '',
         teachingModes: (data.tutorProfile.teaching_modes ?? []).join(', '),
+        teachingLevels: normalizeTeachingLevels(data.tutorProfile.teaching_levels),
         about: data.tutorProfile.about ?? '',
         updatedAt: data.tutorProfile.updated_at,
       });
@@ -110,14 +134,41 @@ export function TutorProfileForm({ profile, tutorProfile, initialError }: TutorP
       <div>
         <h1 className={`${ui.title} text-4xl md:text-5xl`}>Tutor Profile</h1>
         <p className="mt-3 max-w-2xl text-base text-muted">
-          Build the public teaching profile students will browse when your visibility setting is public.
+          Build the teaching profile students see on Find tutors.
         </p>
-        <div className={`${ui.chipAccent} mt-5`}>
-          Public card progress: {completedCount}/4
-        </div>
       </div>
 
-      {error && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+      {listed ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
+          Visible to students on Find tutors.
+        </div>
+      ) : (
+        <div className="space-y-1 rounded-2xl border border-line bg-primary-soft px-4 py-3 text-sm text-primary-deep">
+          {missing.length > 0 && (
+            <p>
+              <span className="font-bold">Hidden from students</span> — still missing: {missing.join(', ')}.
+              {missingInProfile && (
+                <>
+                  {' '}
+                  <Link href="/main/profile" className="font-bold underline underline-offset-2">
+                    Edit in Profile
+                  </Link>
+                </>
+              )}
+            </p>
+          )}
+          {hiddenByPrivacy && (
+            <p>
+              <span className="font-bold">Hidden from students</span> — your visibility is set to Private.{' '}
+              <Link href="/main/settings" className="font-bold underline underline-offset-2">
+                Change in Settings
+              </Link>
+            </p>
+          )}
+        </div>
+      )}
+
+      {error &&<div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
       {savedMessage && (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
           {savedMessage}
@@ -172,6 +223,32 @@ export function TutorProfileForm({ profile, tutorProfile, initialError }: TutorP
             </div>
           </div>
 
+          <fieldset>
+            <legend className={ui.label}>Levels you teach</legend>
+            <div className="flex flex-wrap gap-2">
+              {TEACHING_LEVELS.map((level) => {
+                const checked = form.teachingLevels.includes(level.value);
+
+                return (
+                  <label
+                    key={level.value}
+                    className={`flex cursor-pointer items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${
+                      checked ? 'border-primary bg-primary-soft text-primary-deep' : 'border-line bg-white text-ink-soft hover:border-primary/50'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleLevel(level.value)}
+                      className="h-4 w-4 accent-cta"
+                    />
+                    {level.label}
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
+
           <div>
             <label htmlFor="teachingModes" className={ui.label}>
               Teaching modes
@@ -221,7 +298,7 @@ export function TutorProfileForm({ profile, tutorProfile, initialError }: TutorP
             >
               {isSaving ? 'Saving...' : 'Save tutor profile'}
             </button>
-            <p className="text-sm text-muted">After saving, set visibility to public in Settings if you want students to see this.</p>
+            <p className="text-sm text-muted">You appear on Find tutors once rate, subjects and levels are filled in.</p>
           </div>
         </form>
 
@@ -229,14 +306,10 @@ export function TutorProfileForm({ profile, tutorProfile, initialError }: TutorP
           <div>
             <h2 className={`${ui.title} text-2xl`}>Public preview</h2>
             <p className="mt-1 text-sm text-muted">
-              Students will see this together with your main profile when visibility is public.
+              What students see on your card.
             </p>
           </div>
           <dl className="grid gap-4 text-sm">
-            <div>
-              <dt className="text-muted">Best next step</dt>
-              <dd className="font-medium text-ink">Check your Settings page and switch visibility to public.</dd>
-            </div>
             <div>
               <dt className="text-muted">Display name</dt>
               <dd className="font-medium text-ink">{profile.displayName || profile.email}</dd>
@@ -254,6 +327,16 @@ export function TutorProfileForm({ profile, tutorProfile, initialError }: TutorP
             <div>
               <dt className="text-muted">Rate</dt>
               <dd className="font-medium text-ink">{form.hourlyRate ? `${form.hourlyRate} THB` : 'Not set'}</dd>
+            </div>
+            <div>
+              <dt className="text-muted">Levels</dt>
+              <dd className="font-medium text-ink">
+                {form.teachingLevels.length > 0
+                  ? TEACHING_LEVELS.filter((level) => form.teachingLevels.includes(level.value))
+                      .map((level) => level.label)
+                      .join(', ')
+                  : 'Not set'}
+              </dd>
             </div>
             <div>
               <dt className="text-muted">Modes</dt>
