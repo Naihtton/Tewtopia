@@ -1,20 +1,32 @@
 @import "tailwindcss";
 
-:root {
-  --background: #f7f4ec;
-  --foreground: #171717;
-  --card: #ffffff;
-  --muted: #efe9db;
-  --muted-foreground: #7b7568;
-  --border: rgba(23, 23, 23, 0.1);
-  --accent: #b85c38;
-  --accent-soft: #f4d9c7;
-  --ink-soft: #4e473d;
+/*
+ * Tewtopia design tokens. Change colours here only; components use the
+ * generated utilities (bg-primary, text-ink, bg-cta, ...).
+ */
+@theme inline {
+  --color-cream: #fbf7f0;
+  --color-cream-deep: #f3ece1;
+  --color-line: #eadfd3;
+
+  --color-primary: #9975a1;
+  --color-primary-deep: #7a5a83;
+  --color-primary-soft: #efe6f1;
+
+  --color-cta: #c170d4;
+  --color-cta-deep: #a955bd;
+
+  --color-ink: #2e2433;
+  --color-ink-soft: #5a4f5e;
+  --color-muted: #807484;
+
+  /* Nunito for Latin; rounded Thai face as fallback for future Thai copy. */
+  --font-sans: var(--font-nunito), var(--font-thai), ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 
 @layer base {
   * {
-    border-color: var(--border);
+    border-color: var(--color-line);
   }
 
   html {
@@ -22,15 +34,12 @@
   }
 
   body {
-    background:
-      radial-gradient(circle at top left, rgba(184, 92, 56, 0.08), transparent 28%),
-      radial-gradient(circle at bottom right, rgba(214, 170, 92, 0.14), transparent 24%),
-      var(--background);
-    color: var(--foreground);
-    font-family: "Avenir Next", "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--color-cream);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
   }
 
   ::selection {
-    background: rgba(184, 92, 56, 0.18);
+    background: color-mix(in srgb, var(--color-cta) 22%, transparent);
   }
 }

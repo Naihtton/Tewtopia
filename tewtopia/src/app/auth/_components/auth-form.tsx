@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { ui } from '@/lib/ui';
 
 type AuthFormProps = {
   isConfigured: boolean;
@@ -54,7 +55,7 @@ export function AuthForm({ isConfigured }: AuthFormProps) {
         placeholder="Email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        className="w-full rounded border border-gray-300 p-2"
+        className={ui.input}
         required
       />
       <input
@@ -62,19 +63,19 @@ export function AuthForm({ isConfigured }: AuthFormProps) {
         placeholder="Password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        className="w-full rounded border border-gray-300 p-2"
+        className={ui.input}
         required
       />
       {error && <p className="text-sm text-red-600">{error}</p>}
       {!isConfigured && (
-        <p className="text-sm text-amber-700">
+        <p className="text-sm text-amber-800">
           Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` to `.env.local`.
         </p>
       )}
       <button
         type="submit"
         disabled={!isConfigured || isSubmitting}
-        className="w-full rounded bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-400"
+        className={`${ui.buttonPrimary} w-full disabled:cursor-not-allowed`}
       >
         {isSubmitting ? 'Signing in...' : 'Log In'}
       </button>

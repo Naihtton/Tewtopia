@@ -9,9 +9,6 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@react-pdf-viewer/core": "^3.12.0",
-    "@react-pdf-viewer/default-layout": "^3.12.0",
-    "@react-pdf-viewer/toolbar": "^3.12.0",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.2",
     "next": "15.3.3",

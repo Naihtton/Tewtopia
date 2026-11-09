@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { isSupabaseConfigured } from '@/lib/supabase/config';
-import { ui } from '@/lib/ui';
 
 export function LogoutButton() {
   const router = useRouter();
@@ -33,7 +32,7 @@ export function LogoutButton() {
       type="button"
       onClick={handleLogout}
       disabled={isSubmitting}
-      className={`${ui.buttonSecondary} disabled:cursor-not-allowed disabled:opacity-60`}
+      className="shrink-0 rounded-full px-3 py-2 text-sm font-bold text-muted transition-colors hover:bg-cream hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
     >
       {isSubmitting ? 'Signing out...' : 'Log out'}
     </button>

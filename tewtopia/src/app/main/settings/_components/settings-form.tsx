@@ -55,16 +55,16 @@ function ToggleField({
   onChange: (value: boolean) => void;
 }) {
   return (
-    <label className={`${ui.asideCard} flex items-start justify-between gap-4 ring-1 ring-stone-100`}>
+    <label className={`${ui.asideCard} flex items-start justify-between gap-4 ring-1 ring-line`}>
       <div>
-        <p className="font-medium text-stone-900">{label}</p>
-        <p className="mt-1 text-sm text-stone-500">{description}</p>
+        <p className="font-medium text-ink">{label}</p>
+        <p className="mt-1 text-sm text-muted">{description}</p>
       </div>
       <input
         type="checkbox"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
-        className="mt-1 h-4 w-4 rounded border-stone-300 text-[#b85c38]"
+        className="mt-1 h-4 w-4 rounded border-line accent-cta"
       />
     </label>
   );
@@ -130,7 +130,7 @@ export function SettingsForm({ initialSettings, initialError }: SettingsFormProp
     <div className="max-w-4xl space-y-6">
       <div>
         <h1 className={`${ui.title} text-4xl md:text-5xl`}>Settings</h1>
-        <p className="mt-3 max-w-2xl text-base text-stone-500">Configure notifications, privacy, and document sharing behavior.</p>
+        <p className="mt-3 max-w-2xl text-base text-muted">Configure notifications, privacy, and document sharing behavior.</p>
         <div className="mt-4 flex flex-wrap gap-2">
           <span className={ui.chip}>
             Visibility: {settings.profileVisibility.replace('_', ' ')}
@@ -152,8 +152,8 @@ export function SettingsForm({ initialSettings, initialError }: SettingsFormProp
         <form onSubmit={handleSubmit} className={`${ui.panel} space-y-6 p-6`}>
           <section className="space-y-4">
             <div>
-              <h2 className="text-lg font-semibold text-stone-950">Notifications</h2>
-              <p className="mt-1 text-sm text-stone-500">
+              <h2 className="text-lg font-semibold text-ink">Notifications</h2>
+              <p className="mt-1 text-sm text-muted">
                 Choose which reminders and email updates you want to receive.
               </p>
             </div>
@@ -179,8 +179,8 @@ export function SettingsForm({ initialSettings, initialError }: SettingsFormProp
 
           <section className="space-y-4">
             <div>
-              <h2 className="text-lg font-semibold text-stone-950">Privacy</h2>
-              <p className="mt-1 text-sm text-stone-500">Control who can discover and view your profile details.</p>
+              <h2 className="text-lg font-semibold text-ink">Privacy</h2>
+              <p className="mt-1 text-sm text-muted">Control who can discover and view your profile details.</p>
             </div>
             <div>
               <label className={ui.label} htmlFor="profileVisibility">
@@ -207,8 +207,8 @@ export function SettingsForm({ initialSettings, initialError }: SettingsFormProp
 
           <section className="space-y-4">
             <div>
-              <h2 className="text-lg font-semibold text-stone-950">Documents</h2>
-              <p className="mt-1 text-sm text-stone-500">Set default access rules for shared learning materials.</p>
+              <h2 className="text-lg font-semibold text-ink">Documents</h2>
+              <p className="mt-1 text-sm text-muted">Set default access rules for shared learning materials.</p>
             </div>
             <div>
               <label className={ui.label} htmlFor="documentAccess">
@@ -243,55 +243,55 @@ export function SettingsForm({ initialSettings, initialError }: SettingsFormProp
             <button
               type="submit"
               disabled={isSaving}
-              className={`${ui.buttonPrimary} disabled:cursor-not-allowed disabled:bg-stone-400`}
+              className={`${ui.buttonPrimary} disabled:cursor-not-allowed`}
             >
               {isSaving ? 'Saving...' : 'Save settings'}
             </button>
-            <p className="text-sm text-stone-500">Use public visibility only if you want students to discover your tutor card.</p>
+            <p className="text-sm text-muted">Use public visibility only if you want students to discover your tutor card.</p>
           </div>
         </form>
 
         <aside className={`${ui.panel} space-y-4 p-5`}>
           <div>
             <h2 className={`${ui.title} text-2xl`}>Current summary</h2>
-            <p className="mt-1 text-sm text-stone-500">Preview of the active settings stored for your account.</p>
+            <p className="mt-1 text-sm text-muted">Preview of the active settings stored for your account.</p>
           </div>
           <dl className="grid gap-4 text-sm">
             <div>
-              <dt className="text-stone-500">Quick summary</dt>
-              <dd className="font-medium text-stone-900">{visibilityHelp[settings.profileVisibility]}</dd>
+              <dt className="text-muted">Quick summary</dt>
+              <dd className="font-medium text-ink">{visibilityHelp[settings.profileVisibility]}</dd>
             </div>
             <div>
-              <dt className="text-gray-500">Email notifications</dt>
-              <dd className="font-medium text-gray-900">{settings.emailNotifications ? 'Enabled' : 'Disabled'}</dd>
+              <dt className="text-muted">Email notifications</dt>
+              <dd className="font-medium text-ink">{settings.emailNotifications ? 'Enabled' : 'Disabled'}</dd>
             </div>
             <div>
-              <dt className="text-gray-500">Session reminders</dt>
-              <dd className="font-medium text-gray-900">{settings.sessionReminders ? 'Enabled' : 'Disabled'}</dd>
+              <dt className="text-muted">Session reminders</dt>
+              <dd className="font-medium text-ink">{settings.sessionReminders ? 'Enabled' : 'Disabled'}</dd>
             </div>
             <div>
-              <dt className="text-gray-500">Product updates</dt>
-              <dd className="font-medium text-gray-900">{settings.marketingEmails ? 'Enabled' : 'Disabled'}</dd>
+              <dt className="text-muted">Product updates</dt>
+              <dd className="font-medium text-ink">{settings.marketingEmails ? 'Enabled' : 'Disabled'}</dd>
             </div>
             <div>
-              <dt className="text-gray-500">Profile visibility</dt>
-              <dd className="font-medium capitalize text-gray-900">
+              <dt className="text-muted">Profile visibility</dt>
+              <dd className="font-medium capitalize text-ink">
                 {settings.profileVisibility.replace('_', ' ')}
               </dd>
             </div>
             <div>
-              <dt className="text-gray-500">Document access</dt>
-              <dd className="font-medium capitalize text-gray-900">
+              <dt className="text-muted">Document access</dt>
+              <dd className="font-medium capitalize text-ink">
                 {settings.documentAccess.replace('_', ' ')}
               </dd>
             </div>
             <div>
-              <dt className="text-gray-500">Auto-share documents</dt>
-              <dd className="font-medium text-gray-900">{settings.autoShareDocuments ? 'Enabled' : 'Disabled'}</dd>
+              <dt className="text-muted">Auto-share documents</dt>
+              <dd className="font-medium text-ink">{settings.autoShareDocuments ? 'Enabled' : 'Disabled'}</dd>
             </div>
             <div>
-              <dt className="text-gray-500">Last updated</dt>
-              <dd className="font-medium text-gray-900">
+              <dt className="text-muted">Last updated</dt>
+              <dd className="font-medium text-ink">
                 {settings.updatedAt ? new Date(settings.updatedAt).toLocaleString() : 'Not saved yet'}
               </dd>
             </div>

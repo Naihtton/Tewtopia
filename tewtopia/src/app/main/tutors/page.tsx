@@ -22,7 +22,7 @@ export default async function TutorsPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className={`${ui.title} text-4xl md:text-5xl`}>Browse Tutors</h1>
-          <p className="mt-3 max-w-3xl text-base text-stone-500">
+          <p className="mt-3 max-w-3xl text-base text-muted">
             Public tutor profiles are shown here. Profiles set to matched-only or private stay hidden until matching exists.
           </p>
         </div>
@@ -38,7 +38,7 @@ export default async function TutorsPage() {
       )}
 
       {result.tutors.length === 0 ? (
-        <div className="rounded-lg border border-gray-200 bg-gray-50 p-6 text-sm text-gray-600">
+        <div className="rounded-[1.5rem] border border-line bg-white p-6 text-sm text-muted">
           No public tutor profiles are available yet.
         </div>
       ) : (
@@ -56,8 +56,8 @@ export default async function TutorsPage() {
             <section key={tutor.id} className={`${ui.panel} p-5`}>
               <div className="mb-4 flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-lg font-semibold text-stone-950">{tutor.displayName}</h2>
-                  <p className="mt-1 text-sm text-stone-500">{tutor.headline}</p>
+                  <h2 className="text-lg font-semibold text-ink">{tutor.displayName}</h2>
+                  <p className="mt-1 text-sm text-muted">{tutor.headline}</p>
                 </div>
                 <div className={ui.chip}>
                   {tutor.hourlyRate ? `${tutor.hourlyRate} THB/hr` : 'Ask rate'}
@@ -76,22 +76,22 @@ export default async function TutorsPage() {
               </div>
               <dl className="grid gap-3 text-sm">
                 <div>
-                  <dt className="text-stone-500">Teaching modes</dt>
-                  <dd className="font-medium text-stone-900">
+                  <dt className="text-muted">Teaching modes</dt>
+                  <dd className="font-medium text-ink">
                     {tutor.teachingModes.length > 0 ? tutor.teachingModes.join(', ') : 'Not listed'}
                   </dd>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
-                    <dt className="text-stone-500">Experience</dt>
-                    <dd className="font-medium text-stone-900">
+                    <dt className="text-muted">Experience</dt>
+                    <dd className="font-medium text-ink">
                       {tutor.yearsExperience !== null ? `${tutor.yearsExperience} years` : 'Not listed'}
                     </dd>
                   </div>
                 </div>
                 <div>
-                  <dt className="text-stone-500">About</dt>
-                  <dd className="font-medium leading-6 text-stone-900">{tutor.about || 'No description yet'}</dd>
+                  <dt className="text-muted">About</dt>
+                  <dd className="font-medium leading-6 text-ink">{tutor.about || 'No description yet'}</dd>
                 </div>
               </dl>
             </section>

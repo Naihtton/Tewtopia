@@ -12,7 +12,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   const username = result.profile.displayName || result.profile.email;
 
   return (
-    <MainShell username={username} role={result.profile.role} status={result.profile.status}>
+    <MainShell username={username} role={result.profile.role}>
       {children}
     </MainShell>
   );

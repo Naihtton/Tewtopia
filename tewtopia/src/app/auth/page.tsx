@@ -1,7 +1,9 @@
 import { redirect } from 'next/navigation';
+import { TopNav } from '@/app/_components/top-nav';
 import { AuthForm } from '@/app/auth/_components/auth-form';
 import { getSessionUser } from '@/lib/auth';
 import { isSupabaseConfigured } from '@/lib/supabase/config';
+import { ui } from '@/lib/ui';
 
 export default async function AuthPage() {
   const sessionUser = await getSessionUser();
@@ -12,14 +14,17 @@ export default async function AuthPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gray-100 p-4">
-      <div className="w-full max-w-sm rounded bg-white p-6 shadow">
-        <h1 className="text-2xl font-bold mb-4 text-center">Log In</h1>
-        <p className="mb-4 text-sm text-gray-600">
-          Sign in with a Supabase email/password account to access the main workspace.
-        </p>
-        <AuthForm isConfigured={configured} />
-      </div>
-    </main>
+    <div className={`${ui.shell} flex flex-col`}>
+      <TopNav user={null} />
+      <main className="flex flex-1 items-center justify-center px-4 py-12">
+        <div className={`${ui.panel} w-full max-w-md p-8`}>
+          <h1 className={`${ui.title} text-center text-3xl`}>Log in</h1>
+          <p className="mt-3 mb-6 text-center text-sm leading-6 text-muted">
+            Sign in with your email and password to continue to your workspace.
+          </p>
+          <AuthForm isConfigured={configured} />
+        </div>
+      </main>
+    </div>
   );
 }

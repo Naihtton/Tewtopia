@@ -109,7 +109,7 @@ export function TutorProfileForm({ profile, tutorProfile, initialError }: TutorP
     <div className="max-w-4xl space-y-6">
       <div>
         <h1 className={`${ui.title} text-4xl md:text-5xl`}>Tutor Profile</h1>
-        <p className="mt-3 max-w-2xl text-base text-stone-500">
+        <p className="mt-3 max-w-2xl text-base text-muted">
           Build the public teaching profile students will browse when your visibility setting is public.
         </p>
         <div className={`${ui.chipAccent} mt-5`}>
@@ -217,51 +217,51 @@ export function TutorProfileForm({ profile, tutorProfile, initialError }: TutorP
             <button
               type="submit"
               disabled={isSaving}
-              className={`${ui.buttonPrimary} disabled:cursor-not-allowed disabled:bg-stone-400`}
+              className={`${ui.buttonPrimary} disabled:cursor-not-allowed`}
             >
               {isSaving ? 'Saving...' : 'Save tutor profile'}
             </button>
-            <p className="text-sm text-stone-500">After saving, set visibility to public in Settings if you want students to see this.</p>
+            <p className="text-sm text-muted">After saving, set visibility to public in Settings if you want students to see this.</p>
           </div>
         </form>
 
         <aside className={`${ui.panel} space-y-4 p-5`}>
           <div>
             <h2 className={`${ui.title} text-2xl`}>Public preview</h2>
-            <p className="mt-1 text-sm text-stone-500">
+            <p className="mt-1 text-sm text-muted">
               Students will see this together with your main profile when visibility is public.
             </p>
           </div>
           <dl className="grid gap-4 text-sm">
             <div>
-              <dt className="text-gray-500">Best next step</dt>
-              <dd className="font-medium text-gray-900">Check your Settings page and switch visibility to public.</dd>
+              <dt className="text-muted">Best next step</dt>
+              <dd className="font-medium text-ink">Check your Settings page and switch visibility to public.</dd>
             </div>
             <div>
-              <dt className="text-gray-500">Display name</dt>
-              <dd className="font-medium text-gray-900">{profile.displayName || profile.email}</dd>
+              <dt className="text-muted">Display name</dt>
+              <dd className="font-medium text-ink">{profile.displayName || profile.email}</dd>
             </div>
             <div>
-              <dt className="text-gray-500">Subjects</dt>
-              <dd className="font-medium text-gray-900">
+              <dt className="text-muted">Subjects</dt>
+              <dd className="font-medium text-ink">
                 {profile.preferredSubjects.length > 0 ? profile.preferredSubjects.join(', ') : 'No subjects yet'}
               </dd>
             </div>
             <div>
-              <dt className="text-gray-500">Headline</dt>
-              <dd className="font-medium text-gray-900">{form.headline || 'Not set'}</dd>
+              <dt className="text-muted">Headline</dt>
+              <dd className="font-medium text-ink">{form.headline || 'Not set'}</dd>
             </div>
             <div>
-              <dt className="text-gray-500">Rate</dt>
-              <dd className="font-medium text-gray-900">{form.hourlyRate ? `${form.hourlyRate} THB` : 'Not set'}</dd>
+              <dt className="text-muted">Rate</dt>
+              <dd className="font-medium text-ink">{form.hourlyRate ? `${form.hourlyRate} THB` : 'Not set'}</dd>
             </div>
             <div>
-              <dt className="text-gray-500">Modes</dt>
-              <dd className="font-medium text-gray-900">{form.teachingModes || 'Not set'}</dd>
+              <dt className="text-muted">Modes</dt>
+              <dd className="font-medium text-ink">{form.teachingModes || 'Not set'}</dd>
             </div>
             <div>
-              <dt className="text-gray-500">Last updated</dt>
-              <dd className="font-medium text-gray-900">
+              <dt className="text-muted">Last updated</dt>
+              <dd className="font-medium text-ink">
                 {form.updatedAt ? new Date(form.updatedAt).toLocaleString() : 'Not saved yet'}
               </dd>
             </div>
