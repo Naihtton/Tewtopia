@@ -131,14 +131,30 @@ type PublicTutorCardRow = {
   bio: string | null;
 };
 
+const PUBLIC_TUTOR_COLUMNS =
+  'id, display_name, headline, about, subjects, teaching_levels, teaching_modes, hourly_rate_min, hourly_rate_max, years_experience, bio';
+
+function mapPublicTutorCard(row: PublicTutorCardRow): BrowseTutorCard {
+  return {
+    id: row.id,
+    displayName: row.display_name ?? '',
+    headline: row.headline || 'Tutor',
+    about: row.about || row.bio || '',
+    preferredSubjects: row.subjects ?? [],
+    teachingLevels: row.teaching_levels ?? [],
+    teachingModes: row.teaching_modes ?? [],
+    rateMin: row.hourly_rate_min,
+    rateMax: row.hourly_rate_max,
+    yearsExperience: row.years_experience,
+  };
+}
+
 // Reads only the public_tutor_cards view (no email). Works for guests and signed-in users.
 export async function listPublicTutorCards(): Promise<{ tutors: BrowseTutorCard[]; error: string | null }> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('public_tutor_cards')
-    .select(
-      'id, display_name, headline, about, subjects, teaching_levels, teaching_modes, hourly_rate_min, hourly_rate_max, years_experience, bio',
-    )
+    .select(PUBLIC_TUTOR_COLUMNS)
     .order('display_name')
     .returns<PublicTutorCardRow[]>();
 
@@ -148,21 +164,19 @@ export async function listPublicTutorCards(): Promise<{ tutors: BrowseTutorCard[
     return { tutors: [], error: "We couldn't load tutors right now. Please try again shortly." };
   }
 
-  return {
-    tutors: (data ?? []).map((row) => ({
-      id: row.id,
-      displayName: row.display_name ?? '',
-      headline: row.headline || 'Tutor',
-      about: row.about || row.bio || '',
-      preferredSubjects: row.subjects ?? [],
-      teachingLevels: row.teaching_levels ?? [],
-      teachingModes: row.teaching_modes ?? [],
-      rateMin: row.hourly_rate_min,
-      rateMax: row.hourly_rate_max,
-      yearsExperience: row.years_experience,
-    })),
-    error: null,
-  };
+  return { tutors: (data ?? []).map(mapPublicTutorCard), error: null };
+}
+
+/** Public cards for specific tutors; tutors who are no longer listed are simply absent. */
+export async function getPublicTutorCardsByIds(ids: string[]): Promise<Map<string, BrowseTutorCard>> {
+  if (ids.length === 0) return new Map();
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('public_tutor_cards')
+    .select(PUBLIC_TUTOR_COLUMNS)
+    .in('id', ids)
+    .returns<PublicTutorCardRow[]>();
+  return new Map((data ?? []).map((row) => [row.id, mapPublicTutorCard(row)]));
 }
 
 export function getTutorProfileChecklist(profile: UserProfile, tutorProfile: TutorProfile) {
