@@ -11,9 +11,6 @@ export default async function MyOffersPage() {
   if (!result) {
     redirect('/auth?next=/main/offers');
   }
-  if (result.profile.role !== 'tutor') {
-    redirect('/main/requests');
-  }
 
   const { offers, error } = await listMyOffers(result.profile.id);
 

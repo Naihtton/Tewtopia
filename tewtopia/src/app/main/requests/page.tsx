@@ -10,9 +10,6 @@ export default async function MyRequestsPage() {
   if (!result) {
     redirect('/auth?next=/main/requests');
   }
-  if (result.profile.role !== 'student') {
-    redirect('/main/offers');
-  }
 
   const { requests, error } = await listMyRequestsWithOffers(result.profile.id);
 
@@ -25,7 +22,8 @@ export default async function MyRequestsPage() {
             Tutors send you offers with their price. Accept the ones you like to see their contact details.
           </p>
         </div>
-        <PostRequestLink />
+        {/* Anyone keeps access to requests they own (e.g. after switching role); only students post new ones. */}
+        {result.profile.role === 'student' && <PostRequestLink />}
       </div>
       {error ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>

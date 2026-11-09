@@ -299,8 +299,10 @@ alter table public.tutor_profiles add column if not exists hourly_rate_max integ
 -- new write is checked.
 alter table public.tutor_profiles drop constraint if exists tutor_profiles_rate_range_check;
 
+-- One-time per row: the legacy value is cleared as it is copied, so a tutor who
+-- later clears their range doesn't get the old rate back on the next run.
 update public.tutor_profiles
-set hourly_rate_min = hourly_rate, hourly_rate_max = hourly_rate
+set hourly_rate_min = hourly_rate, hourly_rate_max = hourly_rate, hourly_rate = null
 where hourly_rate is not null and hourly_rate_min is null;
 
 alter table public.tutor_profiles

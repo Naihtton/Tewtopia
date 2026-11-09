@@ -159,6 +159,12 @@ test('legacy hourly_rate is backfilled; sub-250 legacy tutors are unlisted', asy
   assert.deepEqual([migrated[low].hourly_rate_min, migrated[low].hourly_rate_max], [100, 100]);
   const listedIds = (await rows(legacy, `select id::text from public.public_tutor_cards`)).map((r) => r.id);
   assert.deepEqual(listedIds, [ok]);
+
+  // The tutor later clears their rate; re-running schema.sql must not copy the legacy value back.
+  await legacy.exec(`update public.tutor_profiles set hourly_rate_min = null, hourly_rate_max = null where id = '${ok}'`);
+  await legacy.exec(schema);
+  const [after] = await rows(legacy, `select hourly_rate_min, hourly_rate_max from public.tutor_profiles where id = $1`, [ok]);
+  assert.deepEqual([after.hourly_rate_min, after.hourly_rate_max], [null, null], 'cleared rate stays cleared');
 });
 
 test('student contacts: own row only, length-checked', async () => {
