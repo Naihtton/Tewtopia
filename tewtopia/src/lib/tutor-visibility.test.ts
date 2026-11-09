@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { missingTutorFields, normalizeTeachingLevels, TEACHING_LEVELS, tutorListingStatus, tutorSetupChecklist } from './tutor-visibility.ts';
 
-const complete = { displayName: 'Pim', hourlyRate: 500, subjects: ['Math'], teachingLevels: ['primary'], hasContact: true };
+const complete = { displayName: 'Pim', rateMin: 300, rateMax: 500, subjects: ['Math'], teachingLevels: ['primary'], hasContact: true };
 
 test('complete tutor has nothing missing', () => {
   assert.deepEqual(missingTutorFields(complete), []);
@@ -10,14 +10,16 @@ test('complete tutor has nothing missing', () => {
 
 test('reports each missing field in order', () => {
   assert.deepEqual(
-    missingTutorFields({ displayName: '  ', hourlyRate: 0, subjects: [], teachingLevels: [], hasContact: false }),
+    missingTutorFields({ displayName: '  ', rateMin: null, rateMax: null, subjects: [], teachingLevels: [], hasContact: false }),
     ['display name', 'hourly rate', 'subjects', 'teaching levels', 'contact details'],
   );
 });
 
-test('negative or null rate counts as missing', () => {
-  assert.deepEqual(missingTutorFields({ ...complete, hourlyRate: -1 }), ['hourly rate']);
-  assert.deepEqual(missingTutorFields({ ...complete, hourlyRate: null }), ['hourly rate']);
+test('rate below 250, reversed or missing counts as missing', () => {
+  assert.deepEqual(missingTutorFields({ ...complete, rateMin: 200 }), ['hourly rate']);
+  assert.deepEqual(missingTutorFields({ ...complete, rateMin: 500, rateMax: 300 }), ['hourly rate']);
+  assert.deepEqual(missingTutorFields({ ...complete, rateMin: null, rateMax: null }), ['hourly rate']);
+  assert.deepEqual(missingTutorFields({ ...complete, rateMin: 400, rateMax: null }), []);
 });
 
 test('unknown levels do not count', () => {
@@ -52,7 +54,7 @@ test('tutorListingStatus: public, matched_only and missing settings are listed w
 });
 
 test('tutorListingStatus: incomplete is not listed', () => {
-  assert.equal(tutorListingStatus({ ...complete, hourlyRate: 0, visibility: 'public' }).listed, false);
+  assert.equal(tutorListingStatus({ ...complete, rateMin: 0, visibility: 'public' }).listed, false);
 });
 
 test('no contact details hides the tutor', () => {
@@ -60,13 +62,13 @@ test('no contact details hides the tutor', () => {
 });
 
 test('tutorSetupChecklist mirrors the listing rule, in order', () => {
-  const items = tutorSetupChecklist({ ...complete, hasContact: false, hourlyRate: null, visibility: 'private' });
+  const items = tutorSetupChecklist({ ...complete, hasContact: false, rateMin: null, rateMax: null, visibility: 'private' });
   assert.deepEqual(
     items.map((item) => [item.label, item.done]),
     [
       ['Set a display name', true],
       ['Add subjects you teach', true],
-      ['Set your hourly rate', false],
+      ['Set your hourly rate (250+ THB)', false],
       ['Choose the levels you teach', true],
       ['Add at least one contact channel', false],
       ['Visibility is not set to Private', false],

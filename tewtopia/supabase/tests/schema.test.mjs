@@ -23,7 +23,7 @@ async function makeTutorComplete() {
   await reset(db);
   await db.exec(`
     update public.profiles set preferred_subjects = '{Math}' where id = '${T}';
-    update public.tutor_profiles set hourly_rate = 500, teaching_levels = '{primary}', contact_line = 'pimline' where id = '${T}';
+    update public.tutor_profiles set hourly_rate_min = 300, hourly_rate_max = 500, teaching_levels = '{primary}', contact_line = 'pimline' where id = '${T}';
     update public.user_settings set profile_visibility = 'public' where id = '${T}';
   `);
 }
@@ -50,7 +50,7 @@ test('tutor is listed only when complete, has a contact and is not private', asy
   assert.equal((await listed()).length, 0, 'incomplete tutor not listed');
   await db.exec(`
     update public.profiles set preferred_subjects = '{Math}' where id = '${T}';
-    update public.tutor_profiles set hourly_rate = 500, teaching_levels = '{primary}' where id = '${T}';
+    update public.tutor_profiles set hourly_rate_min = 300, hourly_rate_max = 500, teaching_levels = '{primary}' where id = '${T}';
   `);
   assert.equal((await listed()).length, 0, 'complete but no contact → not listed');
   await makeTutorComplete();
@@ -59,8 +59,9 @@ test('tutor is listed only when complete, has a contact and is not private', asy
   assert.equal('email' in card, false, 'view has no email');
   assert.equal(Object.keys(card).some((k) => k.startsWith('contact')), false, 'view has no contact columns');
 
-  await db.exec(`update public.tutor_profiles set hourly_rate = 0 where id = '${T}'`);
-  assert.equal((await listed()).length, 0, 'rate 0 hides');
+  assert.equal(card.hourly_rate_min, 300);
+  assert.equal(card.hourly_rate_max, 500);
+  assert.equal('hourly_rate' in card, false, 'view exposes the range, not the legacy column');
   await makeTutorComplete();
   await db.exec(`update public.user_settings set profile_visibility = 'private' where id = '${T}'`);
   assert.equal((await listed()).length, 0, 'private hides');
@@ -123,4 +124,39 @@ test('role guard: no self-promotion to admin, student↔tutor allowed', async ()
   await reset(db);
   const roles = await rows(db, `select role from public.user_roles where user_id = $1`, [L]);
   assert.equal(roles.some((r) => r.role === 'admin'), false);
+});
+
+test('rate range: 250 floor and min <= max are enforced', async () => {
+  await reset(db);
+  assert.ok(await errorOf(db, `update public.tutor_profiles set hourly_rate_min = 249, hourly_rate_max = 300 where id = $1`, [T]));
+  assert.ok(await errorOf(db, `update public.tutor_profiles set hourly_rate_min = 500, hourly_rate_max = 300 where id = $1`, [T]));
+  assert.equal(await errorOf(db, `update public.tutor_profiles set hourly_rate_min = 250, hourly_rate_max = 250 where id = $1`, [T]), null);
+  await makeTutorComplete();
+});
+
+test('legacy hourly_rate is backfilled; sub-250 legacy tutors are unlisted', async () => {
+  // A fresh database where tutors only have the legacy column, then schema.sql runs again.
+  const legacy = await freshDb();
+  const ok = '55555555-5555-5555-5555-555555555555';
+  const low = '66666666-6666-6666-6666-666666666666';
+  for (const [id, rate] of [[ok, 500], [low, 100]]) {
+    await signUp(legacy, id, `${id}@x.com`, { role: 'tutor', display_name: 'T' });
+    await legacy.exec(`
+      update public.profiles set preferred_subjects = '{Math}' where id = '${id}';
+      alter table public.tutor_profiles disable trigger all;
+      update public.tutor_profiles set hourly_rate = ${rate}, hourly_rate_min = null, hourly_rate_max = null,
+        teaching_levels = '{primary}', contact_line = 'x' where id = '${id}';
+      alter table public.tutor_profiles enable trigger all;
+    `);
+  }
+  const schema = (await import('node:fs')).readFileSync(new URL('../schema.sql', import.meta.url), 'utf8')
+    .replace(/create extension if not exists pgcrypto;/, '');
+  await legacy.exec(schema);
+  const migrated = Object.fromEntries(
+    (await rows(legacy, `select id::text, hourly_rate_min, hourly_rate_max from public.tutor_profiles`)).map((r) => [r.id, r]),
+  );
+  assert.deepEqual([migrated[ok].hourly_rate_min, migrated[ok].hourly_rate_max], [500, 500]);
+  assert.deepEqual([migrated[low].hourly_rate_min, migrated[low].hourly_rate_max], [100, 100]);
+  const listedIds = (await rows(legacy, `select id::text from public.public_tutor_cards`)).map((r) => r.id);
+  assert.deepEqual(listedIds, [ok]);
 });

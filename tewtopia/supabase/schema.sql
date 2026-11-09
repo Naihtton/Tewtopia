@@ -272,6 +272,27 @@ alter table public.tutor_profiles
 add constraint tutor_profiles_teaching_levels_check
 check (teaching_levels <@ array['primary', 'lower_secondary', 'upper_secondary', 'university', 'adult']::text[]);
 
+-- Profile rate is a range (min-max THB/hr) with a 250 floor to discourage
+-- undercutting. The legacy single hourly_rate column is kept but no longer used.
+alter table public.tutor_profiles add column if not exists hourly_rate_min integer;
+alter table public.tutor_profiles add column if not exists hourly_rate_max integer;
+
+-- Drop first so the backfill isn't blocked on re-runs; re-added NOT VALID so
+-- legacy sub-250 rates survive (those tutors are simply unlisted) while every
+-- new write is checked.
+alter table public.tutor_profiles drop constraint if exists tutor_profiles_rate_range_check;
+
+update public.tutor_profiles
+set hourly_rate_min = hourly_rate, hourly_rate_max = hourly_rate
+where hourly_rate is not null and hourly_rate_min is null;
+
+alter table public.tutor_profiles
+add constraint tutor_profiles_rate_range_check
+check (
+  (hourly_rate_min is null and hourly_rate_max is null)
+  or (hourly_rate_min >= 250 and hourly_rate_max >= hourly_rate_min)
+) not valid;
+
 -- Tutor contact channels. Never exposed by public_tutor_cards; signed-in users
 -- read them one tutor at a time through get_tutor_contacts().
 alter table public.tutor_profiles add column if not exists contact_instagram text not null default '';
@@ -368,7 +389,12 @@ execute function public.handle_new_user();
 -- Deliberately NOT security_invoker: it runs with the owner's rights so anon can
 -- read it without any anon policy on profiles / user_settings / tutor_profiles.
 -- Listing rule mirrors src/lib/tutor-visibility.ts (missingTutorFields).
-create or replace view public.public_tutor_cards as
+-- Dropped and recreated (not "create or replace") because columns change;
+-- get_tutor_contacts depends on the view, so it is dropped first and recreated below.
+drop function if exists public.get_tutor_contacts(uuid);
+drop view if exists public.public_tutor_cards;
+
+create view public.public_tutor_cards as
 select
   p.id,
   p.display_name,
@@ -377,7 +403,8 @@ select
   p.preferred_subjects as subjects,
   t.teaching_levels,
   t.teaching_modes,
-  t.hourly_rate,
+  t.hourly_rate_min,
+  t.hourly_rate_max,
   t.years_experience,
   p.bio
 from public.profiles p
@@ -385,7 +412,8 @@ join public.tutor_profiles t on t.id = p.id
 left join public.user_settings s on s.id = p.id
 where p.role = 'tutor'
   and btrim(coalesce(p.display_name, '')) <> ''
-  and t.hourly_rate > 0
+  and t.hourly_rate_min >= 250
+  and t.hourly_rate_max >= t.hourly_rate_min
   and cardinality(p.preferred_subjects) > 0
   and cardinality(t.teaching_levels) > 0
   and (t.contact_instagram <> '' or t.contact_facebook <> '' or t.contact_phone <> '' or t.contact_line <> '')
