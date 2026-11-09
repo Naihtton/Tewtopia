@@ -220,6 +220,23 @@ to authenticated
 using ((select auth.uid()) = user_id)
 with check ((select auth.uid()) = user_id);
 
+-- Student contact channels: shown only to a tutor whose offer the student
+-- accepted, via get_offer_counterpart(). Own-row RLS above covers reads/writes.
+alter table public.student_profiles add column if not exists contact_instagram text not null default '';
+alter table public.student_profiles add column if not exists contact_facebook text not null default '';
+alter table public.student_profiles add column if not exists contact_phone text not null default '';
+alter table public.student_profiles add column if not exists contact_line text not null default '';
+
+alter table public.student_profiles drop constraint if exists student_profiles_contact_length_check;
+alter table public.student_profiles
+add constraint student_profiles_contact_length_check
+check (
+  char_length(contact_instagram) <= 100
+  and char_length(contact_facebook) <= 100
+  and char_length(contact_phone) <= 100
+  and char_length(contact_line) <= 100
+);
+
 -- Tutor-specific profile
 create table if not exists public.tutor_profiles (
   id uuid primary key references auth.users (id) on delete cascade,

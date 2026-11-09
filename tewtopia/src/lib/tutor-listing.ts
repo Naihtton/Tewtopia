@@ -1,6 +1,6 @@
 import type { UserProfile } from '@/lib/profiles';
 import { getCurrentUserSettings } from '@/lib/settings';
-import { hasAnyContact } from '@/lib/tutor-contact';
+import { hasAnyContact } from '@/lib/contact';
 import { getCurrentTutorProfile } from '@/lib/tutor-profiles';
 import { tutorSetupChecklist } from '@/lib/tutor-visibility';
 

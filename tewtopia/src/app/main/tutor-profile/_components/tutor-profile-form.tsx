@@ -9,7 +9,7 @@ import {
   normalizeContactDetails,
   type ContactChannel,
   type ContactDetails,
-} from '@/lib/tutor-contact';
+} from '@/lib/contact';
 import { MIN_HOURLY_RATE, parseRateRange, formatRate } from '@/lib/rates';
 import type { TutorProfile } from '@/lib/tutor-profiles';
 import {

@@ -1,6 +1,6 @@
 import { getCurrentUserProfile, type UserProfile } from '@/lib/profiles';
 import { createClient } from '@/lib/supabase/server';
-import { EMPTY_CONTACT_DETAILS, normalizeContactDetails, type ContactDetails } from '@/lib/tutor-contact';
+import { EMPTY_CONTACT_DETAILS, normalizeContactDetails, type ContactDetails } from '@/lib/contact';
 import { normalizeTeachingLevels, type TeachingLevel } from '@/lib/tutor-visibility';
 
 export type TutorProfile = {

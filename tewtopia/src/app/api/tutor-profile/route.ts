@@ -3,7 +3,7 @@ import { getCurrentUserProfile } from '@/lib/profiles';
 import { parseCommaSeparatedList, syncTutorTeachingModes } from '@/lib/profile-sync';
 import { createClient } from '@/lib/supabase/server';
 import { parseRateRange } from '@/lib/rates';
-import { normalizeContactDetails } from '@/lib/tutor-contact';
+import { normalizeContactDetails } from '@/lib/contact';
 import { normalizeTeachingLevels } from '@/lib/tutor-visibility';
 
 function contactColumns(contacts: ReturnType<typeof normalizeContactDetails>) {

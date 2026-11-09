@@ -160,3 +160,20 @@ test('legacy hourly_rate is backfilled; sub-250 legacy tutors are unlisted', asy
   const listedIds = (await rows(legacy, `select id::text from public.public_tutor_cards`)).map((r) => r.id);
   assert.deepEqual(listedIds, [ok]);
 });
+
+test('student contacts: own row only, length-checked', async () => {
+  await as(db, 'authenticated', S);
+  assert.equal(
+    await errorOf(db, `insert into public.student_profiles (user_id, contact_line) values ($1, 'noklin')
+      on conflict (user_id) do update set contact_line = excluded.contact_line`, [S]),
+    null,
+  );
+  assert.equal((await rows(db, `select contact_line from public.student_profiles where user_id = $1`, [S]))[0].contact_line, 'noklin');
+  assert.ok(await errorOf(db, `update public.student_profiles set contact_phone = $1 where user_id = $2`, ['9'.repeat(101), S]));
+
+  await as(db, 'authenticated', T);
+  assert.equal((await rows(db, `select * from public.student_profiles where user_id = $1`, [S])).length, 0, 'others cannot read');
+  await as(db, 'anon');
+  assert.equal((await rows(db, `select * from public.student_profiles`)).length, 0);
+  await reset(db);
+});

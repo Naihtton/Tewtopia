@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { CONTACT_CHANNELS, type ContactChannel, type ContactDetails } from '@/lib/contact';
 import type { UserProfile, UserRole } from '@/lib/profiles';
 import type { TutorChecklist } from '@/lib/tutor-listing';
 import { ui } from '@/lib/ui';
@@ -22,6 +23,7 @@ type ProfileState = {
   email: string;
   status: UserProfile['status'];
   updatedAt: string | null;
+  contacts: ContactDetails;
 };
 
 function toFormState(profile: UserProfile): ProfileState {
@@ -33,6 +35,7 @@ function toFormState(profile: UserProfile): ProfileState {
     email: profile.email,
     status: profile.status,
     updatedAt: profile.updatedAt,
+    contacts: profile.contacts,
   };
 }
 
@@ -67,6 +70,10 @@ export function ProfileForm({ initialProfile, initialError, tutorChecklist }: Pr
     profile.bio.trim().length > 0,
     profile.status === 'profile_ready',
   ].filter(Boolean).length;
+
+  function setContact(channel: ContactChannel, value: string) {
+    setProfile((current) => ({ ...current, contacts: { ...current.contacts, [channel]: value } }));
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -116,6 +123,20 @@ export function ProfileForm({ initialProfile, initialError, tutorChecklist }: Pr
         status: data.profile?.status ?? 'profile_incomplete',
         updatedAt: data.profile?.updated_at ?? null,
       }));
+      // Students' contact channels live in student_profiles; saved separately.
+      if (profile.role === 'student') {
+        const contactResponse = await fetch('/api/student-contacts', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contacts: profile.contacts }),
+        });
+        if (!contactResponse.ok) {
+          const contactData = (await contactResponse.json()) as { error?: string };
+          setError(contactData.error ?? 'Profile saved, but contact details could not be saved.');
+          return;
+        }
+      }
+
       setSavedMessage('Profile saved.');
       // Re-read server data so the tutor listing status reflects the save.
       router.refresh();
@@ -226,6 +247,33 @@ export function ProfileForm({ initialProfile, initialError, tutorChecklist }: Pr
               ))}
             </div>
           </div>
+
+          {profile.role === 'student' && (
+            <fieldset>
+              <legend className={ui.label}>Contact details</legend>
+              <p className="-mt-1 mb-3 text-xs text-muted">
+                Shown only to tutors whose offer you accept. You need at least one to post a request.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {CONTACT_CHANNELS.map(({ channel, label, placeholder }) => (
+                  <div key={channel}>
+                    <label htmlFor={`contact-${channel}`} className="mb-1 block text-xs font-bold text-muted">
+                      {label}
+                    </label>
+                    <input
+                      id={`contact-${channel}`}
+                      value={profile.contacts[channel]}
+                      onChange={(event) => setContact(channel, event.target.value)}
+                      maxLength={100}
+                      inputMode={channel === 'phone' ? 'tel' : undefined}
+                      className={ui.input}
+                      placeholder={placeholder}
+                    />
+                  </div>
+                ))}
+              </div>
+            </fieldset>
+          )}
 
           <div>
             <label className={ui.label} htmlFor="bio">

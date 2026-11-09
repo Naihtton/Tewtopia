@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { formatRate } from '@/lib/rates';
 import { createClient } from '@/lib/supabase/client';
-import { contactLinks, normalizeContactDetails, type ContactLink } from '@/lib/tutor-contact';
+import { contactLinks, normalizeContactDetails, type ContactLink } from '@/lib/contact';
 import type { BrowseTutorCard } from '@/lib/tutor-profiles';
 import { TEACHING_LEVELS } from '@/lib/tutor-visibility';
 import { ui } from '@/lib/ui';
