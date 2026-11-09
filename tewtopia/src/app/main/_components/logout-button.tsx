@@ -1,0 +1,41 @@
+'use client';
+
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import { isSupabaseConfigured } from '@/lib/supabase/config';
+import { ui } from '@/lib/ui';
+
+export function LogoutButton() {
+  const router = useRouter();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleLogout = async () => {
+    if (!isSupabaseConfigured()) {
+      router.push('/auth');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      router.push('/auth');
+      router.refresh();
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleLogout}
+      disabled={isSubmitting}
+      className={`${ui.buttonSecondary} disabled:cursor-not-allowed disabled:opacity-60`}
+    >
+      {isSubmitting ? 'Signing out...' : 'Log out'}
+    </button>
+  );
+}
