@@ -7,7 +7,11 @@ import { PGlite } from '@electric-sql/pglite';
 
 const SCHEMA_PATH = new URL('../schema.sql', import.meta.url);
 
-export async function freshDb() {
+/**
+ * @param {{ before?: string }} [options] SQL run before schema.sql — e.g. tables in an
+ *   older shape, to check that schema.sql upgrades an existing database.
+ */
+export async function freshDb({ before = '' } = {}) {
   const db = new PGlite();
   await db.exec(`
     create role anon; create role authenticated; create role service_role;
@@ -44,6 +48,7 @@ export async function freshDb() {
 
   // pgcrypto isn't bundled; gen_random_uuid() is built in on PG 13+.
   const schema = readFileSync(SCHEMA_PATH, 'utf8').replace(/create extension if not exists pgcrypto;/, '');
+  if (before) await db.exec(before);
   await db.exec(schema);
   await db.exec(schema); // must be idempotent
   return db;

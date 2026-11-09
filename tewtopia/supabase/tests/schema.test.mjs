@@ -235,3 +235,25 @@ test('public_tutor_cards exposes the tutor avatar', async () => {
   assert.equal(card.avatar_url, avatarUrl(T));
   await reset(db);
 });
+
+test('schema.sql upgrades a database whose profiles table predates avatar_url', async () => {
+  // The live project created `profiles` from an older schema (no avatar_url column).
+  const legacyProfiles = `
+    create table public.profiles (
+      id uuid primary key references auth.users (id) on delete cascade,
+      email text not null,
+      display_name text,
+      role text not null default 'student' check (role in ('student', 'tutor', 'admin')),
+      preferred_subjects text[] not null default '{}',
+      bio text not null default '',
+      status text not null default 'profile_incomplete',
+      created_at timestamptz not null default timezone('utc', now()),
+      updated_at timestamptz not null default timezone('utc', now())
+    );`;
+  const upgraded = await freshDb({ before: legacyProfiles });
+  const columns = (await rows(upgraded, `select column_name from information_schema.columns where table_name = 'profiles'`)).map(
+    (r) => r.column_name,
+  );
+  assert.ok(columns.includes('avatar_url'));
+  assert.ok((await rows(upgraded, `select column_name from information_schema.columns where table_name = 'public_tutor_cards' and column_name = 'avatar_url'`)).length === 1);
+});
