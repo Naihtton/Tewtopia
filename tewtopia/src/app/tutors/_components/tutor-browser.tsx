@@ -1,9 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
+import { ContactList } from '@/app/_components/contact-list';
+import { Modal } from '@/app/_components/modal';
+import { formatRate } from '@/lib/rates';
 import { createClient } from '@/lib/supabase/client';
-import { contactLinks, normalizeContactDetails, type ContactLink } from '@/lib/tutor-contact';
+import { contactLinks, normalizeContactDetails, type ContactLink } from '@/lib/contact';
 import type { BrowseTutorCard } from '@/lib/tutor-profiles';
 import { TEACHING_LEVELS } from '@/lib/tutor-visibility';
 import { ui } from '@/lib/ui';
@@ -58,7 +61,7 @@ export function TutorBrowser({ tutors, isSignedIn, initialTutorId }: TutorBrowse
   );
 }
 
-function TutorSummary({ tutor, full = false }: { tutor: BrowseTutorCard; full?: boolean }) {
+export function TutorSummary({ tutor, full = false }: { tutor: BrowseTutorCard; full?: boolean }) {
   return (
     <>
       <div className="flex items-start justify-between gap-4">
@@ -72,8 +75,7 @@ function TutorSummary({ tutor, full = false }: { tutor: BrowseTutorCard; full?: 
           </div>
         </div>
         <div className="shrink-0 text-right">
-          <p className="text-lg font-extrabold text-ink">{tutor.hourlyRate} THB</p>
-          <p className="text-xs text-muted">per hour</p>
+          <p className="text-lg font-extrabold text-ink">{formatRate(tutor.rateMin, tutor.rateMax)}</p>
         </div>
       </div>
 
@@ -129,15 +131,7 @@ function TutorModal({
   isSignedIn: boolean;
   onClose: () => void;
 }) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const [contact, setContact] = useState<ContactState>({ status: 'idle' });
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (dialog && !dialog.open) {
-      dialog.showModal();
-    }
-  }, []);
 
   async function revealContacts() {
     setContact({ status: 'loading' });
@@ -153,28 +147,7 @@ function TutorModal({
   }
 
   return (
-    <dialog
-      ref={dialogRef}
-      aria-labelledby="tutor-modal-title"
-      onClose={onClose}
-      // Clicking the backdrop (the dialog element itself, outside the panel) closes it.
-      onClick={(event) => {
-        if (event.target === event.currentTarget) dialogRef.current?.close();
-      }}
-      className="m-auto w-[calc(100%-2rem)] max-w-2xl rounded-[1.75rem] bg-white p-0 text-ink shadow-[0_24px_60px_rgba(46,36,51,0.25)] backdrop:bg-ink/40 backdrop:backdrop-blur-sm"
-    >
-      <div className="max-h-[85vh] overflow-y-auto p-6 sm:p-7">
-        <div className="mb-2 flex justify-end">
-          <button
-            type="button"
-            onClick={() => dialogRef.current?.close()}
-            aria-label="Close"
-            className="-mr-2 -mt-2 flex h-9 w-9 items-center justify-center rounded-full text-xl text-muted outline-none hover:bg-cream hover:text-ink focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            ×
-          </button>
-        </div>
-
+    <Modal labelledBy="tutor-modal-title" onClose={onClose}>
         <span id="tutor-modal-title" className="sr-only">
           {tutor.displayName}
         </span>
@@ -209,56 +182,6 @@ function TutorModal({
             </>
           )}
         </div>
-      </div>
-    </dialog>
-  );
-}
-
-function ContactList({ links }: { links: ContactLink[] }) {
-  const [copied, setCopied] = useState<string | null>(null);
-
-  if (links.length === 0) {
-    return <p className="text-center text-sm text-muted">This tutor hasn&apos;t shared contact details yet.</p>;
-  }
-
-  async function copy(link: ContactLink) {
-    try {
-      await navigator.clipboard.writeText(link.value);
-      setCopied(link.channel);
-    } catch {
-      setCopied(null);
-    }
-  }
-
-  return (
-    <div>
-      <h3 className="mb-3 text-sm font-extrabold uppercase tracking-[0.14em] text-muted">Contact</h3>
-      <ul className="space-y-2">
-        {links.map((link) => (
-          <li key={link.channel} className="flex items-center gap-3 rounded-2xl bg-cream px-4 py-3">
-            <span className="w-20 shrink-0 text-xs font-bold text-muted">{link.label}</span>
-            {link.href ? (
-              <a
-                href={link.href}
-                target={link.channel === 'phone' ? undefined : '_blank'}
-                rel="noopener noreferrer"
-                className="min-w-0 flex-1 truncate font-bold text-primary-deep underline-offset-2 hover:underline"
-              >
-                {link.value}
-              </a>
-            ) : (
-              <span className="min-w-0 flex-1 truncate font-bold text-ink">{link.value}</span>
-            )}
-            <button
-              type="button"
-              onClick={() => copy(link)}
-              className="shrink-0 rounded-full px-3 py-1 text-xs font-bold text-muted hover:bg-white hover:text-ink"
-            >
-              {copied === link.channel ? 'Copied' : 'Copy'}
-            </button>
-          </li>
-        ))}
-      </ul>
-    </div>
+    </Modal>
   );
 }

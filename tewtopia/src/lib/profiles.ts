@@ -1,4 +1,5 @@
 import { getSessionUser } from '@/lib/auth';
+import { EMPTY_CONTACT_DETAILS, normalizeContactDetails, type ContactDetails } from '@/lib/contact';
 import { createClient } from '@/lib/supabase/server';
 
 export type UserRole = 'student' | 'tutor';
@@ -12,6 +13,8 @@ export type UserProfile = {
   bio: string;
   status: 'profile_incomplete' | 'profile_ready';
   updatedAt: string | null;
+  // Student contact channels (student_profiles). Empty for tutors.
+  contacts: ContactDetails;
 };
 
 type ProfileRow = {
@@ -35,6 +38,7 @@ function buildDefaultProfile(user: { id: string; email: string }): UserProfile {
     bio: '',
     status: 'profile_incomplete',
     updatedAt: null,
+    contacts: EMPTY_CONTACT_DETAILS,
   };
 }
 
@@ -48,6 +52,7 @@ function mapProfileRow(row: ProfileRow): UserProfile {
     bio: row.bio ?? '',
     status: row.status ?? 'profile_incomplete',
     updatedAt: row.updated_at,
+    contacts: EMPTY_CONTACT_DETAILS,
   };
 }
 
@@ -79,8 +84,27 @@ export async function getCurrentUserProfile() {
     };
   }
 
+  const profile = mapProfileRow(data);
+
+  if (profile.role === 'student') {
+    const { data: student } = await supabase
+      .from('student_profiles')
+      .select('contact_instagram, contact_facebook, contact_phone, contact_line')
+      .eq('user_id', profile.id)
+      .maybeSingle();
+
+    if (student) {
+      profile.contacts = normalizeContactDetails({
+        instagram: student.contact_instagram,
+        facebook: student.contact_facebook,
+        phone: student.contact_phone,
+        line: student.contact_line,
+      });
+    }
+  }
+
   return {
-    profile: mapProfileRow(data),
+    profile,
     error: null,
   };
 }

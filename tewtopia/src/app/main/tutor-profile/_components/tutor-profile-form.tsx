@@ -9,7 +9,8 @@ import {
   normalizeContactDetails,
   type ContactChannel,
   type ContactDetails,
-} from '@/lib/tutor-contact';
+} from '@/lib/contact';
+import { MIN_HOURLY_RATE, parseRateRange, formatRate } from '@/lib/rates';
 import type { TutorProfile } from '@/lib/tutor-profiles';
 import {
   tutorListingStatus,
@@ -28,7 +29,8 @@ type TutorProfileFormProps = {
 
 type TutorProfileState = {
   headline: string;
-  hourlyRate: string;
+  rateMin: string;
+  rateMax: string;
   yearsExperience: string;
   teachingModes: string;
   teachingLevels: TeachingLevel[];
@@ -40,7 +42,8 @@ type TutorProfileState = {
 function toFormState(tutorProfile: TutorProfile): TutorProfileState {
   return {
     headline: tutorProfile.headline,
-    hourlyRate: tutorProfile.hourlyRate?.toString() ?? '',
+    rateMin: tutorProfile.rateMin?.toString() ?? '',
+    rateMax: tutorProfile.rateMax !== null && tutorProfile.rateMax !== tutorProfile.rateMin ? tutorProfile.rateMax.toString() : '',
     yearsExperience: tutorProfile.yearsExperience?.toString() ?? '',
     teachingModes: tutorProfile.teachingModes.join(', '),
     teachingLevels: tutorProfile.teachingLevels,
@@ -71,10 +74,16 @@ export function TutorProfileForm({ profile, tutorProfile, initialError, visibili
   const [error, setError] = useState<string | null>(initialError);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const rateEmpty = form.rateMin.trim() === '' && form.rateMax.trim() === '';
+  const rate = parseRateRange(form.rateMin, form.rateMax);
+  // Only show an error once they've typed something; empty just means "not set yet".
+  const rateError = !rateEmpty && !rate.ok ? rate.error : null;
+
   // Mirrors the public_tutor_cards view, using what is currently on screen.
   const { listed, missing, hiddenByPrivacy } = tutorListingStatus({
     displayName: profile.displayName,
-    hourlyRate: form.hourlyRate.trim() === '' ? null : Number(form.hourlyRate),
+    rateMin: rate.ok ? rate.min : null,
+    rateMax: rate.ok ? rate.max : null,
     subjects: profile.preferredSubjects,
     teachingLevels: form.teachingLevels,
     hasContact: hasAnyContact(normalizeContactDetails(form.contacts)),
@@ -97,6 +106,10 @@ export function TutorProfileForm({ profile, tutorProfile, initialError, visibili
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (rateError) {
+      setError(rateError);
+      return;
+    }
     setError(null);
     setSavedMessage(null);
     setIsSaving(true);
@@ -112,7 +125,8 @@ export function TutorProfileForm({ profile, tutorProfile, initialError, visibili
         error?: string;
         tutorProfile?: {
           headline: string | null;
-          hourly_rate: number | null;
+          hourly_rate_min: number | null;
+          hourly_rate_max: number | null;
           years_experience: number | null;
           teaching_modes: string[] | null;
           teaching_levels: string[] | null;
@@ -132,7 +146,11 @@ export function TutorProfileForm({ profile, tutorProfile, initialError, visibili
 
       setForm({
         headline: data.tutorProfile.headline ?? '',
-        hourlyRate: data.tutorProfile.hourly_rate?.toString() ?? '',
+        rateMin: data.tutorProfile.hourly_rate_min?.toString() ?? '',
+        rateMax:
+          data.tutorProfile.hourly_rate_max !== null && data.tutorProfile.hourly_rate_max !== data.tutorProfile.hourly_rate_min
+            ? data.tutorProfile.hourly_rate_max.toString()
+            : '',
         yearsExperience: data.tutorProfile.years_experience?.toString() ?? '',
         teachingModes: (data.tutorProfile.teaching_modes ?? []).join(', '),
         teachingLevels: normalizeTeachingLevels(data.tutorProfile.teaching_levels),
@@ -158,7 +176,11 @@ export function TutorProfileForm({ profile, tutorProfile, initialError, visibili
       <div>
         <h1 className={`${ui.title} text-4xl md:text-5xl`}>Tutor Profile</h1>
         <p className="mt-3 max-w-2xl text-base text-muted">
-          Build the teaching profile students see on Find tutors.
+          Build the teaching profile students see on Find tutors. Your name, subjects and bio are in{' '}
+          <Link href="/main/profile" className="font-bold text-primary-deep underline underline-offset-2">
+            Profile
+          </Link>
+          .
         </p>
       </div>
 
@@ -214,21 +236,48 @@ export function TutorProfileForm({ profile, tutorProfile, initialError, visibili
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="hourlyRate" className={ui.label}>
-                Hourly rate
-              </label>
-              <input
-                id="hourlyRate"
-                type="number"
-                min="0"
-                value={form.hourlyRate}
-                onChange={(event) => setForm((current) => ({ ...current, hourlyRate: event.target.value }))}
-                className={ui.input}
-                placeholder="500"
-              />
+          <fieldset>
+            <legend className={ui.label}>Hourly rate (THB)</legend>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="rateMin" className="mb-1 block text-xs font-bold text-muted">
+                  From
+                </label>
+                <input
+                  id="rateMin"
+                  type="number"
+                  min={MIN_HOURLY_RATE}
+                  step={1}
+                  value={form.rateMin}
+                  onChange={(event) => setForm((current) => ({ ...current, rateMin: event.target.value }))}
+                  className={ui.input}
+                  placeholder="300"
+                />
+              </div>
+              <div>
+                <label htmlFor="rateMax" className="mb-1 block text-xs font-bold text-muted">
+                  To (optional)
+                </label>
+                <input
+                  id="rateMax"
+                  type="number"
+                  min={MIN_HOURLY_RATE}
+                  step={1}
+                  value={form.rateMax}
+                  onChange={(event) => setForm((current) => ({ ...current, rateMax: event.target.value }))}
+                  className={ui.input}
+                  placeholder="500"
+                />
+              </div>
             </div>
+            {rateError ? (
+              <p className="mt-2 text-xs font-semibold text-red-600">{rateError}</p>
+            ) : (
+              <p className={ui.helper}>Minimum {MIN_HOURLY_RATE} THB/hr. Leave &quot;To&quot; empty for a single rate.</p>
+            )}
+          </fieldset>
+
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label htmlFor="yearsExperience" className={ui.label}>
                 Years of experience
@@ -375,7 +424,7 @@ export function TutorProfileForm({ profile, tutorProfile, initialError, visibili
             </div>
             <div>
               <dt className="text-muted">Rate</dt>
-              <dd className="font-medium text-ink">{form.hourlyRate ? `${form.hourlyRate} THB` : 'Not set'}</dd>
+              <dd className="font-medium text-ink">{rate.ok ? formatRate(rate.min, rate.max) : 'Not set'}</dd>
             </div>
             <div>
               <dt className="text-muted">Levels</dt>

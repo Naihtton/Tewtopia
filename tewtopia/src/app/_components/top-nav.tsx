@@ -3,12 +3,17 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LogoutButton } from '@/app/main/_components/logout-button';
+import { navTabs, type NavBadge } from '@/lib/nav-tabs';
 import type { UserRole } from '@/lib/profiles';
 import { ui } from '@/lib/ui';
 
 export type NavUser = {
   name: string;
   role: UserRole;
+  // Things waiting on this user, per page.
+  badges: Record<NavBadge, number>;
+  // Rows the user owns regardless of current role (keeps pages reachable after a role switch).
+  owns: { hasRequests: boolean; hasOffers: boolean };
 };
 
 type TopNavProps = {
@@ -16,28 +21,15 @@ type TopNavProps = {
   user: NavUser | null;
 };
 
-function tabsFor(role: UserRole) {
-  return [
-    { href: '/main/dashboard', label: 'Dashboard' },
-    role === 'tutor'
-      ? { href: '/main/tutor-profile', label: 'Tutor profile' }
-      : { href: '/tutors', label: 'Find tutors' },
-    { href: '/main/profile', label: 'Profile' },
-    { href: '/main/settings', label: 'Settings' },
-  ];
-}
-
 function ctaFor(role: UserRole) {
   return role === 'tutor'
     ? { href: '/main/tutor-profile', label: 'Edit tutor profile' }
-    : { href: '/tutors', label: 'Find a tutor' };
+    : { href: '/main/requests/new', label: 'Post a request' };
 }
-
-const guestTabs = [{ href: '/tutors', label: 'Find tutors' }];
 
 export function TopNav({ user }: TopNavProps) {
   const pathname = usePathname();
-  const tabs = user ? tabsFor(user.role) : guestTabs;
+  const tabs = navTabs(user?.role ?? null, user?.owns ?? { hasRequests: false, hasOffers: false });
   // Come back to this page after logging in (the home page falls back to the default).
   const loginHref = pathname === '/' ? '/auth' : `/auth?next=${encodeURIComponent(pathname)}`;
   const cta = user ? ctaFor(user.role) : null;
@@ -57,6 +49,14 @@ export function TopNav({ user }: TopNavProps) {
         }`}
       >
         {tab.label}
+        {tab.badge && user && user.badges[tab.badge] > 0 && (
+          <span
+            aria-label={`${user.badges[tab.badge]} need attention`}
+            className="ml-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-cta px-1.5 text-[0.7rem] font-extrabold leading-5 text-white"
+          >
+            {user.badges[tab.badge]}
+          </span>
+        )}
       </Link>
     );
   });

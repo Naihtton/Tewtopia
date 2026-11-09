@@ -1,4 +1,5 @@
 // Pure helpers (no `@/` imports) so `node --test` can load them directly.
+import { parseRateRange } from './rates.ts';
 // The listing rule here mirrors the `public_tutor_cards` view in supabase/schema.sql.
 
 export type TeachingLevel = 'primary' | 'lower_secondary' | 'upper_secondary' | 'university' | 'adult';
@@ -24,7 +25,8 @@ export function normalizeTeachingLevels(values: unknown): TeachingLevel[] {
 
 export function missingTutorFields(input: {
   displayName: string;
-  hourlyRate: number | null;
+  rateMin: number | null;
+  rateMax: number | null;
   subjects: string[];
   teachingLevels: string[];
   hasContact: boolean;
@@ -32,7 +34,7 @@ export function missingTutorFields(input: {
   const missing: MissingTutorField[] = [];
 
   if (input.displayName.trim().length === 0) missing.push('display name');
-  if (input.hourlyRate === null || !(input.hourlyRate > 0)) missing.push('hourly rate');
+  if (!parseRateRange(input.rateMin, input.rateMax).ok) missing.push('hourly rate');
   if (input.subjects.length === 0) missing.push('subjects');
   if (normalizeTeachingLevels(input.teachingLevels).length === 0) missing.push('teaching levels');
   if (!input.hasContact) missing.push('contact details');
@@ -59,7 +61,7 @@ export function tutorSetupChecklist(
   return [
     { label: 'Set a display name', done: !missing.includes('display name') },
     { label: 'Add subjects you teach', done: !missing.includes('subjects') },
-    { label: 'Set your hourly rate', done: !missing.includes('hourly rate') },
+    { label: 'Set your hourly rate (250+ THB)', done: !missing.includes('hourly rate') },
     { label: 'Choose the levels you teach', done: !missing.includes('teaching levels') },
     { label: 'Add at least one contact channel', done: !missing.includes('contact details') },
     { label: 'Visibility is not set to Private', done: !hiddenByPrivacy },

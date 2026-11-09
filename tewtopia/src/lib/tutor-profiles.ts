@@ -1,12 +1,13 @@
 import { getCurrentUserProfile, type UserProfile } from '@/lib/profiles';
 import { createClient } from '@/lib/supabase/server';
-import { EMPTY_CONTACT_DETAILS, normalizeContactDetails, type ContactDetails } from '@/lib/tutor-contact';
+import { EMPTY_CONTACT_DETAILS, normalizeContactDetails, type ContactDetails } from '@/lib/contact';
 import { normalizeTeachingLevels, type TeachingLevel } from '@/lib/tutor-visibility';
 
 export type TutorProfile = {
   id: string;
   headline: string;
-  hourlyRate: number | null;
+  rateMin: number | null;
+  rateMax: number | null;
   yearsExperience: number | null;
   teachingModes: string[];
   teachingLevels: TeachingLevel[];
@@ -18,7 +19,8 @@ export type TutorProfile = {
 type TutorProfileRow = {
   id: string;
   headline: string | null;
-  hourly_rate: number | null;
+  hourly_rate_min: number | null;
+  hourly_rate_max: number | null;
   years_experience: number | null;
   teaching_modes: string[] | null;
   teaching_levels: string[] | null;
@@ -38,7 +40,8 @@ export type BrowseTutorCard = {
   preferredSubjects: string[];
   teachingLevels: string[];
   teachingModes: string[];
-  hourlyRate: number | null;
+  rateMin: number | null;
+  rateMax: number | null;
   yearsExperience: number | null;
 };
 
@@ -46,7 +49,8 @@ function buildDefaultTutorProfile(userId: string): TutorProfile {
   return {
     id: userId,
     headline: '',
-    hourlyRate: null,
+    rateMin: null,
+    rateMax: null,
     yearsExperience: null,
     teachingModes: [],
     teachingLevels: [],
@@ -60,7 +64,8 @@ function mapTutorProfileRow(row: TutorProfileRow): TutorProfile {
   return {
     id: row.id,
     headline: row.headline ?? '',
-    hourlyRate: row.hourly_rate,
+    rateMin: row.hourly_rate_min,
+    rateMax: row.hourly_rate_max,
     yearsExperience: row.years_experience,
     teachingModes: row.teaching_modes ?? [],
     teachingLevels: normalizeTeachingLevels(row.teaching_levels),
@@ -93,7 +98,7 @@ export async function getCurrentTutorProfile() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('tutor_profiles')
-    .select('id, headline, hourly_rate, years_experience, teaching_modes, teaching_levels, contact_instagram, contact_facebook, contact_phone, contact_line, about, updated_at')
+    .select('id, headline, hourly_rate_min, hourly_rate_max, years_experience, teaching_modes, teaching_levels, contact_instagram, contact_facebook, contact_phone, contact_line, about, updated_at')
     .eq('id', profileResult.profile.id)
     .maybeSingle<TutorProfileRow>();
 
@@ -120,19 +125,36 @@ type PublicTutorCardRow = {
   subjects: string[] | null;
   teaching_levels: string[] | null;
   teaching_modes: string[] | null;
-  hourly_rate: number | null;
+  hourly_rate_min: number | null;
+  hourly_rate_max: number | null;
   years_experience: number | null;
   bio: string | null;
 };
+
+const PUBLIC_TUTOR_COLUMNS =
+  'id, display_name, headline, about, subjects, teaching_levels, teaching_modes, hourly_rate_min, hourly_rate_max, years_experience, bio';
+
+function mapPublicTutorCard(row: PublicTutorCardRow): BrowseTutorCard {
+  return {
+    id: row.id,
+    displayName: row.display_name ?? '',
+    headline: row.headline || 'Tutor',
+    about: row.about || row.bio || '',
+    preferredSubjects: row.subjects ?? [],
+    teachingLevels: row.teaching_levels ?? [],
+    teachingModes: row.teaching_modes ?? [],
+    rateMin: row.hourly_rate_min,
+    rateMax: row.hourly_rate_max,
+    yearsExperience: row.years_experience,
+  };
+}
 
 // Reads only the public_tutor_cards view (no email). Works for guests and signed-in users.
 export async function listPublicTutorCards(): Promise<{ tutors: BrowseTutorCard[]; error: string | null }> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('public_tutor_cards')
-    .select(
-      'id, display_name, headline, about, subjects, teaching_levels, teaching_modes, hourly_rate, years_experience, bio',
-    )
+    .select(PUBLIC_TUTOR_COLUMNS)
     .order('display_name')
     .returns<PublicTutorCardRow[]>();
 
@@ -142,20 +164,19 @@ export async function listPublicTutorCards(): Promise<{ tutors: BrowseTutorCard[
     return { tutors: [], error: "We couldn't load tutors right now. Please try again shortly." };
   }
 
-  return {
-    tutors: (data ?? []).map((row) => ({
-      id: row.id,
-      displayName: row.display_name ?? '',
-      headline: row.headline || 'Tutor',
-      about: row.about || row.bio || '',
-      preferredSubjects: row.subjects ?? [],
-      teachingLevels: row.teaching_levels ?? [],
-      teachingModes: row.teaching_modes ?? [],
-      hourlyRate: row.hourly_rate,
-      yearsExperience: row.years_experience,
-    })),
-    error: null,
-  };
+  return { tutors: (data ?? []).map(mapPublicTutorCard), error: null };
+}
+
+/** Public cards for specific tutors; tutors who are no longer listed are simply absent. */
+export async function getPublicTutorCardsByIds(ids: string[]): Promise<Map<string, BrowseTutorCard>> {
+  if (ids.length === 0) return new Map();
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('public_tutor_cards')
+    .select(PUBLIC_TUTOR_COLUMNS)
+    .in('id', ids)
+    .returns<PublicTutorCardRow[]>();
+  return new Map((data ?? []).map((row) => [row.id, mapPublicTutorCard(row)]));
 }
 
 export function getTutorProfileChecklist(profile: UserProfile, tutorProfile: TutorProfile) {

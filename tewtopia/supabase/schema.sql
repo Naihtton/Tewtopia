@@ -220,6 +220,23 @@ to authenticated
 using ((select auth.uid()) = user_id)
 with check ((select auth.uid()) = user_id);
 
+-- Student contact channels: shown only to a tutor whose offer the student
+-- accepted, via get_offer_counterpart(). Own-row RLS above covers reads/writes.
+alter table public.student_profiles add column if not exists contact_instagram text not null default '';
+alter table public.student_profiles add column if not exists contact_facebook text not null default '';
+alter table public.student_profiles add column if not exists contact_phone text not null default '';
+alter table public.student_profiles add column if not exists contact_line text not null default '';
+
+alter table public.student_profiles drop constraint if exists student_profiles_contact_length_check;
+alter table public.student_profiles
+add constraint student_profiles_contact_length_check
+check (
+  char_length(contact_instagram) <= 100
+  and char_length(contact_facebook) <= 100
+  and char_length(contact_phone) <= 100
+  and char_length(contact_line) <= 100
+);
+
 -- Tutor-specific profile
 create table if not exists public.tutor_profiles (
   id uuid primary key references auth.users (id) on delete cascade,
@@ -271,6 +288,29 @@ alter table public.tutor_profiles drop constraint if exists tutor_profiles_teach
 alter table public.tutor_profiles
 add constraint tutor_profiles_teaching_levels_check
 check (teaching_levels <@ array['primary', 'lower_secondary', 'upper_secondary', 'university', 'adult']::text[]);
+
+-- Profile rate is a range (min-max THB/hr) with a 250 floor to discourage
+-- undercutting. The legacy single hourly_rate column is kept but no longer used.
+alter table public.tutor_profiles add column if not exists hourly_rate_min integer;
+alter table public.tutor_profiles add column if not exists hourly_rate_max integer;
+
+-- Drop first so the backfill isn't blocked on re-runs; re-added NOT VALID so
+-- legacy sub-250 rates survive (those tutors are simply unlisted) while every
+-- new write is checked.
+alter table public.tutor_profiles drop constraint if exists tutor_profiles_rate_range_check;
+
+-- One-time per row: the legacy value is cleared as it is copied, so a tutor who
+-- later clears their range doesn't get the old rate back on the next run.
+update public.tutor_profiles
+set hourly_rate_min = hourly_rate, hourly_rate_max = hourly_rate, hourly_rate = null
+where hourly_rate is not null and hourly_rate_min is null;
+
+alter table public.tutor_profiles
+add constraint tutor_profiles_rate_range_check
+check (
+  (hourly_rate_min is null and hourly_rate_max is null)
+  or (hourly_rate_min >= 250 and hourly_rate_max >= hourly_rate_min)
+) not valid;
 
 -- Tutor contact channels. Never exposed by public_tutor_cards; signed-in users
 -- read them one tutor at a time through get_tutor_contacts().
@@ -368,7 +408,12 @@ execute function public.handle_new_user();
 -- Deliberately NOT security_invoker: it runs with the owner's rights so anon can
 -- read it without any anon policy on profiles / user_settings / tutor_profiles.
 -- Listing rule mirrors src/lib/tutor-visibility.ts (missingTutorFields).
-create or replace view public.public_tutor_cards as
+-- Dropped and recreated (not "create or replace") because columns change;
+-- get_tutor_contacts depends on the view, so it is dropped first and recreated below.
+drop function if exists public.get_tutor_contacts(uuid);
+drop view if exists public.public_tutor_cards;
+
+create view public.public_tutor_cards as
 select
   p.id,
   p.display_name,
@@ -377,7 +422,8 @@ select
   p.preferred_subjects as subjects,
   t.teaching_levels,
   t.teaching_modes,
-  t.hourly_rate,
+  t.hourly_rate_min,
+  t.hourly_rate_max,
   t.years_experience,
   p.bio
 from public.profiles p
@@ -385,7 +431,8 @@ join public.tutor_profiles t on t.id = p.id
 left join public.user_settings s on s.id = p.id
 where p.role = 'tutor'
   and btrim(coalesce(p.display_name, '')) <> ''
-  and t.hourly_rate > 0
+  and t.hourly_rate_min >= 250
+  and t.hourly_rate_max >= t.hourly_rate_min
   and cardinality(p.preferred_subjects) > 0
   and cardinality(t.teaching_levels) > 0
   and (t.contact_instagram <> '' or t.contact_facebook <> '' or t.contact_phone <> '' or t.contact_line <> '')
@@ -706,3 +753,418 @@ from (
     ('sat-prep', 'SAT Prep', 'Exam Prep')
 ) as seed(slug, name, category)
 where not exists (select 1 from public.subjects);
+
+-- ---------------------------------------------------------------------------
+-- Request board: students post what they need, listed tutors send one offer
+-- (a single hourly price) per post. All writes go through the functions below;
+-- the tables have read-only RLS. No budget field by design (avoids a price norm).
+-- ---------------------------------------------------------------------------
+
+create table if not exists public.student_requests (
+  id uuid primary key default gen_random_uuid(),
+  student_user_id uuid not null references public.profiles (id) on delete cascade,
+  subjects text[] not null,
+  teaching_levels text[] not null,
+  teaching_modes text[] not null,
+  details text not null default '',
+  -- legacy free-text schedule (unused; replaced by schedule_slots)
+  schedule text not null default '',
+  -- [{ "day": "mon", "start": "15:30", "end": "16:30" }, ...] — validated by valid_schedule_slots()
+  schedule_slots jsonb not null default '[]',
+  status text not null default 'open' check (status in ('open', 'closed', 'cancelled')),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  constraint student_requests_fields_check check (
+    cardinality(subjects) > 0
+    and cardinality(teaching_levels) > 0
+    and cardinality(teaching_modes) > 0
+    and teaching_levels <@ array['primary', 'lower_secondary', 'upper_secondary', 'university', 'adult']::text[]
+    and teaching_modes <@ array['online', 'in_person', 'group', 'hybrid']::text[]
+    and char_length(details) <= 1000
+  )
+);
+
+-- Upgrades for databases created before structured schedules.
+alter table public.student_requests add column if not exists schedule_slots jsonb not null default '[]';
+alter table public.student_requests alter column schedule set default '';
+alter table public.student_requests drop constraint if exists student_requests_fields_check;
+alter table public.student_requests
+add constraint student_requests_fields_check check (
+  cardinality(subjects) > 0
+  and cardinality(teaching_levels) > 0
+  and cardinality(teaching_modes) > 0
+  and teaching_levels <@ array['primary', 'lower_secondary', 'upper_secondary', 'university', 'adult']::text[]
+  and teaching_modes <@ array['online', 'in_person', 'group', 'hybrid']::text[]
+  and char_length(details) <= 1000
+  and jsonb_typeof(schedule_slots) = 'array'
+);
+
+-- One range per weekday, times on the half hour between 06:00 and 22:00, end after start.
+-- Mirrors validateRequestInput() in src/lib/requests.ts.
+create or replace function public.valid_schedule_slots(p_slots jsonb)
+returns boolean language sql immutable as $$
+  select
+    jsonb_typeof(p_slots) = 'array'
+    and jsonb_array_length(p_slots) between 1 and 7
+    and not exists (
+      select 1
+      from jsonb_array_elements(p_slots) as slot
+      where jsonb_typeof(slot) <> 'object'
+        or coalesce(slot->>'day', '') not in ('mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun')
+        or coalesce(slot->>'start', '') !~ '^(0[6-9]|1[0-9]|2[0-1]):(00|30)$|^22:00$'
+        or coalesce(slot->>'end', '') !~ '^(0[6-9]|1[0-9]|2[0-1]):(00|30)$|^22:00$'
+        or slot->>'end' <= slot->>'start'
+    )
+    and (select count(distinct slot->>'day') from jsonb_array_elements(p_slots) as slot) = jsonb_array_length(p_slots);
+$$;
+
+create index if not exists student_requests_student_idx on public.student_requests (student_user_id);
+
+drop trigger if exists set_student_requests_updated_at on public.student_requests;
+create trigger set_student_requests_updated_at
+before update on public.student_requests
+for each row
+execute function public.set_updated_at();
+
+create table if not exists public.request_offers (
+  id uuid primary key default gen_random_uuid(),
+  request_id uuid not null references public.student_requests (id) on delete cascade,
+  tutor_user_id uuid not null references public.tutor_profiles (id) on delete cascade,
+  hourly_rate integer not null check (hourly_rate >= 250),
+  status text not null default 'pending'
+    check (status in ('pending', 'accepted', 'declined', 'deal_done', 'closed', 'withdrawn')),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (request_id, tutor_user_id)
+);
+
+create index if not exists request_offers_request_idx on public.request_offers (request_id);
+create index if not exists request_offers_tutor_idx on public.request_offers (tutor_user_id);
+
+drop trigger if exists set_request_offers_updated_at on public.request_offers;
+create trigger set_request_offers_updated_at
+before update on public.request_offers
+for each row
+execute function public.set_updated_at();
+
+-- RLS helpers. The two tables' policies refer to each other; going through
+-- security definer functions avoids infinite policy recursion.
+create or replace function public.is_request_owner(p_request uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.student_requests r where r.id = p_request and r.student_user_id = auth.uid());
+$$;
+
+create or replace function public.has_offer_on(p_request uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.request_offers o where o.request_id = p_request and o.tutor_user_id = auth.uid());
+$$;
+
+alter table public.student_requests enable row level security;
+alter table public.request_offers enable row level security;
+
+drop policy if exists "Students can view own requests" on public.student_requests;
+create policy "Students can view own requests"
+on public.student_requests for select to authenticated
+using ((select auth.uid()) = student_user_id);
+
+drop policy if exists "Tutors can view requests they offered on" on public.student_requests;
+create policy "Tutors can view requests they offered on"
+on public.student_requests for select to authenticated
+using (public.has_offer_on(id));
+
+drop policy if exists "Tutors can view own offers" on public.request_offers;
+create policy "Tutors can view own offers"
+on public.request_offers for select to authenticated
+using ((select auth.uid()) = tutor_user_id);
+
+drop policy if exists "Students can view offers on own requests" on public.request_offers;
+create policy "Students can view offers on own requests"
+on public.request_offers for select to authenticated
+using (public.is_request_owner(request_id));
+
+-- Public board: open posts only. Shows the student's display name (chosen by them,
+-- and they are told it appears here) but never contacts, ids or offer prices — only
+-- the number of offers. Runs with owner rights, like public_tutor_cards.
+-- New columns are appended at the end so "create or replace" keeps working.
+create or replace view public.public_request_cards as
+select
+  r.id,
+  r.subjects,
+  r.teaching_levels,
+  r.teaching_modes,
+  r.details,
+  r.schedule,
+  r.created_at,
+  (
+    select count(*)::int
+    from public.request_offers o
+    where o.request_id = r.id and o.status in ('pending', 'accepted')
+  ) as offer_count,
+  r.schedule_slots,
+  coalesce(nullif(btrim(p.display_name), ''), 'Student') as student_name
+from public.student_requests r
+join public.profiles p on p.id = r.student_user_id
+where r.status = 'open';
+
+revoke all on public.public_request_cards from public, anon, authenticated;
+grant select on public.public_request_cards to anon, authenticated;
+
+-- Signature changed (free-text schedule → schedule_slots); drop the old overload.
+drop function if exists public.create_request(text[], text[], text, text, text[]);
+
+create or replace function public.create_request(
+  p_subjects text[],
+  p_teaching_levels text[],
+  p_details text,
+  p_schedule_slots jsonb,
+  p_teaching_modes text[]
+)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare
+  uid uuid := auth.uid();
+  new_id uuid;
+begin
+  if uid is null then
+    raise exception 'Not signed in';
+  end if;
+  if not exists (select 1 from public.profiles where id = uid and role = 'student') then
+    raise exception 'Only students can post requests';
+  end if;
+  if not exists (
+    select 1 from public.student_profiles sp
+    where sp.user_id = uid
+      and (sp.contact_instagram <> '' or sp.contact_facebook <> '' or sp.contact_phone <> '' or sp.contact_line <> '')
+  ) then
+    raise exception 'Add at least one contact channel before posting';
+  end if;
+  -- One subject per request (tutors price per subject). Older rows may have several.
+  if cardinality(p_subjects) is distinct from 1 then
+    raise exception 'Choose one subject';
+  end if;
+  if exists (select 1 from unnest(p_subjects) s where s not in (select name from public.subjects)) then
+    raise exception 'Unknown subject';
+  end if;
+  if p_schedule_slots is null or not public.valid_schedule_slots(p_schedule_slots) then
+    raise exception 'Pick at least one day with a valid time range';
+  end if;
+
+  insert into public.student_requests (student_user_id, subjects, teaching_levels, teaching_modes, details, schedule_slots)
+  values (uid, p_subjects, p_teaching_levels, p_teaching_modes, btrim(coalesce(p_details, '')), p_schedule_slots)
+  returning id into new_id;
+
+  return new_id;
+end;
+$$;
+
+create or replace function public.cancel_request(p_request uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  update public.student_requests
+  set status = 'cancelled'
+  where id = p_request and student_user_id = auth.uid() and status = 'open';
+  if not found then
+    raise exception 'Request is no longer open';
+  end if;
+
+  update public.request_offers
+  set status = 'closed'
+  where request_id = p_request and status in ('pending', 'accepted');
+end;
+$$;
+
+create or replace function public.submit_offer(p_request uuid, p_rate integer)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare
+  uid uuid := auth.uid();
+  req record;
+  existing record;
+  offer_id uuid;
+begin
+  if uid is null or not exists (select 1 from public.public_tutor_cards c where c.id = uid) then
+    raise exception 'Finish your tutor profile to send offers';
+  end if;
+  if p_rate is null or p_rate < 250 then
+    raise exception 'The minimum rate is 250 THB/hr';
+  end if;
+
+  select student_user_id, status into req from public.student_requests where id = p_request for update;
+  if not found or req.status <> 'open' then
+    raise exception 'This request is no longer open';
+  end if;
+  if req.student_user_id = uid then
+    raise exception 'You cannot make an offer on your own request';
+  end if;
+
+  select id, status into existing
+  from public.request_offers
+  where request_id = p_request and tutor_user_id = uid
+  for update;
+
+  if not found then
+    insert into public.request_offers (request_id, tutor_user_id, hourly_rate)
+    values (p_request, uid, p_rate)
+    returning id into offer_id;
+    return offer_id;
+  end if;
+
+  if existing.status in ('pending', 'withdrawn') then
+    update public.request_offers set hourly_rate = p_rate, status = 'pending' where id = existing.id;
+    return existing.id;
+  end if;
+
+  raise exception 'You already have an offer on this request';
+end;
+$$;
+
+create or replace function public.withdraw_offer(p_offer uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  update public.request_offers
+  set status = 'withdrawn'
+  where id = p_offer and tutor_user_id = auth.uid() and status = 'pending';
+  if not found then
+    raise exception 'Offer is no longer pending';
+  end if;
+end;
+$$;
+
+create or replace function public.accept_offer(p_offer uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  o record;
+begin
+  select ro.request_id, ro.tutor_user_id, r.student_user_id
+  into o
+  from public.request_offers ro
+  join public.student_requests r on r.id = ro.request_id
+  where ro.id = p_offer;
+
+  if not found or o.student_user_id <> auth.uid() then
+    raise exception 'Offer not found';
+  end if;
+  if not exists (select 1 from public.public_tutor_cards c where c.id = o.tutor_user_id) then
+    raise exception 'This tutor is no longer available';
+  end if;
+
+  perform 1 from public.student_requests where id = o.request_id and status = 'open' for update;
+  if not found then
+    raise exception 'Request is no longer open';
+  end if;
+
+  update public.request_offers set status = 'accepted' where id = p_offer and status = 'pending';
+  if not found then
+    raise exception 'Offer is no longer pending';
+  end if;
+end;
+$$;
+
+create or replace function public.decline_offer(p_offer uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  update public.request_offers ro
+  set status = 'declined'
+  where ro.id = p_offer
+    and ro.status in ('pending', 'accepted')
+    and public.is_request_owner(ro.request_id);
+  if not found then
+    raise exception 'Offer can no longer be declined';
+  end if;
+end;
+$$;
+
+create or replace function public.confirm_deal(p_offer uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  o record;
+begin
+  select ro.request_id, ro.tutor_user_id, r.student_user_id
+  into o
+  from public.request_offers ro
+  join public.student_requests r on r.id = ro.request_id
+  where ro.id = p_offer;
+
+  if not found or auth.uid() not in (o.student_user_id, o.tutor_user_id) then
+    raise exception 'Offer not found';
+  end if;
+
+  -- Lock the request so two deals on the same post cannot both succeed.
+  perform 1 from public.student_requests where id = o.request_id and status = 'open' for update;
+  if not found then
+    raise exception 'Request is no longer open';
+  end if;
+
+  update public.request_offers set status = 'deal_done' where id = p_offer and status = 'accepted';
+  if not found then
+    raise exception 'Offer is no longer accepted';
+  end if;
+
+  update public.student_requests set status = 'closed' where id = o.request_id;
+  update public.request_offers
+  set status = 'closed'
+  where request_id = o.request_id and id <> p_offer and status in ('pending', 'accepted');
+end;
+$$;
+
+-- The other party of an accepted offer: the tutor (for the student) or the
+-- student (for the tutor), with their contact channels. Nothing before accept.
+create or replace function public.get_offer_counterpart(p_offer uuid)
+returns table (display_name text, instagram text, facebook text, phone text, line text)
+language sql stable security definer set search_path = public as $$
+  select coalesce(p.display_name, ''), t.contact_instagram, t.contact_facebook, t.contact_phone, t.contact_line
+  from public.request_offers o
+  join public.student_requests r on r.id = o.request_id
+  join public.profiles p on p.id = o.tutor_user_id
+  join public.tutor_profiles t on t.id = o.tutor_user_id
+  where o.id = p_offer and o.status in ('accepted', 'deal_done') and r.student_user_id = auth.uid()
+  union all
+  select coalesce(p.display_name, ''),
+    coalesce(sp.contact_instagram, ''), coalesce(sp.contact_facebook, ''),
+    coalesce(sp.contact_phone, ''), coalesce(sp.contact_line, '')
+  from public.request_offers o
+  join public.student_requests r on r.id = o.request_id
+  join public.profiles p on p.id = r.student_user_id
+  left join public.student_profiles sp on sp.user_id = r.student_user_id
+  where o.id = p_offer and o.status in ('accepted', 'deal_done') and o.tutor_user_id = auth.uid();
+$$;
+
+-- Numbers for the nav badges.
+create or replace function public.my_attention_counts()
+returns table (pending_offers int, accepted_offers int)
+language sql stable security definer set search_path = public as $$
+  select
+    (
+      select count(*)::int
+      from public.request_offers o
+      join public.student_requests r on r.id = o.request_id
+      where r.student_user_id = auth.uid() and r.status = 'open' and o.status = 'pending'
+    ),
+    (
+      select count(*)::int
+      from public.request_offers o
+      where o.tutor_user_id = auth.uid() and o.status = 'accepted'
+    );
+$$;
+
+revoke all on function public.is_request_owner(uuid) from public, anon;
+revoke all on function public.has_offer_on(uuid) from public, anon;
+revoke all on function public.create_request(text[], text[], text, jsonb, text[]) from public, anon;
+revoke all on function public.cancel_request(uuid) from public, anon;
+revoke all on function public.submit_offer(uuid, integer) from public, anon;
+revoke all on function public.withdraw_offer(uuid) from public, anon;
+revoke all on function public.accept_offer(uuid) from public, anon;
+revoke all on function public.decline_offer(uuid) from public, anon;
+revoke all on function public.confirm_deal(uuid) from public, anon;
+revoke all on function public.get_offer_counterpart(uuid) from public, anon;
+revoke all on function public.my_attention_counts() from public, anon;
+
+grant execute on function public.is_request_owner(uuid) to authenticated;
+grant execute on function public.has_offer_on(uuid) to authenticated;
+grant execute on function public.create_request(text[], text[], text, jsonb, text[]) to authenticated;
+grant execute on function public.cancel_request(uuid) to authenticated;
+grant execute on function public.submit_offer(uuid, integer) to authenticated;
+grant execute on function public.withdraw_offer(uuid) to authenticated;
+grant execute on function public.accept_offer(uuid) to authenticated;
+grant execute on function public.decline_offer(uuid) to authenticated;
+grant execute on function public.confirm_deal(uuid) to authenticated;
+grant execute on function public.get_offer_counterpart(uuid) to authenticated;
+grant execute on function public.my_attention_counts() to authenticated;

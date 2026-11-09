@@ -1,6 +1,6 @@
 import type { UserProfile } from '@/lib/profiles';
 import { getCurrentUserSettings } from '@/lib/settings';
-import { hasAnyContact } from '@/lib/tutor-contact';
+import { hasAnyContact } from '@/lib/contact';
 import { getCurrentTutorProfile } from '@/lib/tutor-profiles';
 import { tutorSetupChecklist } from '@/lib/tutor-visibility';
 
@@ -17,7 +17,8 @@ export async function getCurrentTutorChecklist(profile: UserProfile): Promise<Tu
   return tutorSetupChecklist({
     displayName: profile.displayName,
     subjects: profile.preferredSubjects,
-    hourlyRate: tutorProfile?.hourlyRate ?? null,
+    rateMin: tutorProfile?.rateMin ?? null,
+    rateMax: tutorProfile?.rateMax ?? null,
     teachingLevels: tutorProfile?.teachingLevels ?? [],
     hasContact: tutorProfile ? hasAnyContact(tutorProfile.contacts) : false,
     visibility: settingsResult?.settings.profileVisibility ?? null,

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { contactLinks, hasAnyContact, normalizeContactDetails } from './tutor-contact.ts';
+import { contactLinks, hasAnyContact, normalizeContactDetails } from './contact.ts';
 
 test('normalizeContactDetails trims, caps at 100 chars and drops non-strings', () => {
   const long = 'x'.repeat(150);
