@@ -65,6 +65,7 @@ test('validateRequestInput length limits and unknown values', () => {
     return result.ok ? [] : Object.keys(result.errors);
   };
   assert.deepEqual(errorsFor({ details: 'x'.repeat(1001) }), ['details']);
+  assert.deepEqual(errorsFor({ subjects: ['Mathematics', 'Physics'] }), ['subjects'], 'one subject per request');
   assert.deepEqual(errorsFor({ teachingModes: ['weekend'] }), ['teachingModes']);
   assert.deepEqual(errorsFor({ teachingLevels: ['kindergarten'] }), ['teachingLevels']);
   assert.deepEqual(errorsFor({ details: 'x'.repeat(1000) }), []);

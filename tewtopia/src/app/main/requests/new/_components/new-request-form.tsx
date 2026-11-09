@@ -213,13 +213,28 @@ export function NewRequestForm({ subjects, initialContacts, displayName }: NewRe
 
   return (
     <form onSubmit={handleSubmit} className={`${ui.panel} max-w-3xl space-y-6 p-6`}>
-      <CheckboxGroup
-        legend="Subjects"
-        options={subjects.map((subject) => ({ value: subject, label: subject }))}
-        selected={form.subjects}
-        onToggle={(value) => setForm((current) => ({ ...current, subjects: toggle(current.subjects, value) }))}
-        error={errors.subjects}
-      />
+      <div>
+        <label htmlFor="subject" className={ui.label}>
+          Subject
+        </label>
+        <select
+          id="subject"
+          value={form.subjects[0] ?? ''}
+          onChange={(event) =>
+            setForm((current) => ({ ...current, subjects: event.target.value ? [event.target.value] : [] }))
+          }
+          className={`${ui.input} appearance-auto`}
+        >
+          <option value="">Choose a subject…</option>
+          {subjects.map((subject) => (
+            <option key={subject} value={subject}>
+              {subject}
+            </option>
+          ))}
+        </select>
+        <p className={ui.helper}>One subject per request. Need help with another? Post a second request.</p>
+        {errors.subjects && <p className="mt-2 text-xs font-semibold text-red-600">{errors.subjects}</p>}
+      </div>
       <CheckboxGroup
         legend="Level"
         options={TEACHING_LEVELS.map((level) => ({ value: level.value, label: level.label }))}

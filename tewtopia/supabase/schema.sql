@@ -937,6 +937,10 @@ begin
   ) then
     raise exception 'Add at least one contact channel before posting';
   end if;
+  -- One subject per request (tutors price per subject). Older rows may have several.
+  if cardinality(p_subjects) is distinct from 1 then
+    raise exception 'Choose one subject';
+  end if;
   if exists (select 1 from unnest(p_subjects) s where s not in (select name from public.subjects)) then
     raise exception 'Unknown subject';
   end if;

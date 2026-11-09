@@ -64,6 +64,7 @@ test('create_request: students with a contact only, fields validated', async () 
     [['Mathematics'], ['weekend'], '', validSlots, ['online']],
     [['Mathematics'], ['primary'], '', validSlots, ['weekend']],
     [['Basket weaving'], ['primary'], '', validSlots, ['online']],
+    [['Mathematics', 'Physics'], ['primary'], '', validSlots, ['online']], // one subject per request
     // schedule slots
     [['Mathematics'], ['primary'], '', '[]', ['online']],
     [['Mathematics'], ['primary'], '', slots({ day: 'fun', start: '09:00', end: '10:00' }), ['online']],

@@ -79,7 +79,8 @@ export function validateRequestInput(
   const details = input.details.trim();
   const modeValues = new Set<string>(TEACHING_MODES.map((mode) => mode.value));
 
-  if (input.subjects.length === 0) errors.subjects = 'Choose at least one subject.';
+  // One subject per request: tutors price per subject, and it keeps the board easy to scan.
+  if (input.subjects.length !== 1) errors.subjects = 'Choose a subject.';
   if (input.teachingLevels.length === 0) {
     errors.teachingLevels = 'Choose at least one level.';
   } else if (normalizeTeachingLevels(input.teachingLevels).length !== new Set(input.teachingLevels).size) {
