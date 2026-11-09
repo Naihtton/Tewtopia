@@ -49,3 +49,19 @@ export function tutorListingStatus(
 
   return { listed: missing.length === 0 && !hiddenByPrivacy, missing, hiddenByPrivacy };
 }
+
+// The same rule as tutorListingStatus, as a step-by-step checklist for the dashboard.
+export function tutorSetupChecklist(
+  input: Parameters<typeof tutorListingStatus>[0],
+): { label: string; done: boolean }[] {
+  const { missing, hiddenByPrivacy } = tutorListingStatus(input);
+
+  return [
+    { label: 'Set a display name', done: !missing.includes('display name') },
+    { label: 'Add subjects you teach', done: !missing.includes('subjects') },
+    { label: 'Set your hourly rate', done: !missing.includes('hourly rate') },
+    { label: 'Choose the levels you teach', done: !missing.includes('teaching levels') },
+    { label: 'Add at least one contact channel', done: !missing.includes('contact details') },
+    { label: 'Visibility is not set to Private', done: !hiddenByPrivacy },
+  ];
+}

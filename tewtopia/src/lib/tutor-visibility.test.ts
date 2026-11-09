@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { missingTutorFields, normalizeTeachingLevels, TEACHING_LEVELS, tutorListingStatus } from './tutor-visibility.ts';
+import { missingTutorFields, normalizeTeachingLevels, TEACHING_LEVELS, tutorListingStatus, tutorSetupChecklist } from './tutor-visibility.ts';
 
 const complete = { displayName: 'Pim', hourlyRate: 500, subjects: ['Math'], teachingLevels: ['primary'], hasContact: true };
 
@@ -57,4 +57,26 @@ test('tutorListingStatus: incomplete is not listed', () => {
 
 test('no contact details hides the tutor', () => {
   assert.deepEqual(missingTutorFields({ ...complete, hasContact: false }), ['contact details']);
+});
+
+test('tutorSetupChecklist mirrors the listing rule, in order', () => {
+  const items = tutorSetupChecklist({ ...complete, hasContact: false, hourlyRate: null, visibility: 'private' });
+  assert.deepEqual(
+    items.map((item) => [item.label, item.done]),
+    [
+      ['Set a display name', true],
+      ['Add subjects you teach', true],
+      ['Set your hourly rate', false],
+      ['Choose the levels you teach', true],
+      ['Add at least one contact channel', false],
+      ['Visibility is not set to Private', false],
+    ],
+  );
+});
+
+test('tutorSetupChecklist is all done exactly when the tutor is listed', () => {
+  const input = { ...complete, visibility: 'public' };
+  assert.equal(tutorSetupChecklist(input).every((item) => item.done), tutorListingStatus(input).listed);
+  const hidden = { ...complete, hasContact: false, visibility: 'public' };
+  assert.equal(tutorSetupChecklist(hidden).every((item) => item.done), tutorListingStatus(hidden).listed);
 });
