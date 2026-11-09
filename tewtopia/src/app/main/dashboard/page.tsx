@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getCurrentUserProfile } from '@/lib/profiles';
+import { getCurrentTutorChecklist } from '@/lib/tutor-listing';
 import { ui } from '@/lib/ui';
 
 function buildChecklist(profile: {
@@ -38,24 +39,29 @@ export default async function DashboardPage() {
 
   const { profile } = result;
   const isTutor = profile.role === 'tutor';
-  const checklist = buildChecklist(profile);
+
+  // Tutors: the checklist is the Find tutors listing rule, so "done" means students can see you.
+  const checklist = isTutor ? await getCurrentTutorChecklist(profile) : buildChecklist(profile);
+
   const completedCount = checklist.filter((item) => item.done).length;
   const isSetupComplete = completedCount === checklist.length;
   const headingName = profile.displayName || profile.email;
   const roleCopy = isTutor
-    ? 'Your tutor workspace is ready for availability, materials, and learner requests.'
+    ? isSetupComplete
+      ? 'You are visible to students on Find tutors.'
+      : 'Students can’t see you on Find tutors yet. Finish the steps below to get listed.'
     : 'Your student workspace is ready for tutor matching, notes, and learning materials.';
   const primaryAction = isTutor
     ? { href: '/main/tutor-profile', label: 'Edit Tutor Profile' }
     : { href: '/tutors', label: 'Browse Tutors' };
   const secondaryAction = isTutor
-    ? { href: '/main/settings', label: 'Review Visibility Settings' }
+    ? { href: '/tutors', label: 'See Find tutors' }
     : { href: '/main/profile', label: 'Update Learning Preferences' };
   const nextSteps = isTutor
     ? [
-        'Complete tutor headline and teaching modes.',
-        'Set profile visibility to public in Settings.',
-        'Review your public card from the tutor profile page.',
+        'Add a clear headline and teaching modes so students know what you offer.',
+        'Students contact you directly through the channels on your tutor profile.',
+        'Check how your card looks on Find tutors.',
       ]
     : [
         'Add subjects you want help with in Profile.',
@@ -86,13 +92,15 @@ export default async function DashboardPage() {
         <section className={`${ui.panel} p-6`}>
           <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h2 className={`${ui.title} text-2xl`}>Finish setting up your profile</h2>
+              <h2 className={`${ui.title} text-2xl`}>
+                {isTutor ? 'Get listed on Find tutors' : 'Finish setting up your profile'}
+              </h2>
               <p className="mt-1 text-sm text-muted">
                 {completedCount} of {checklist.length} steps done.
               </p>
             </div>
-            <Link href="/main/profile" className={ui.buttonSecondary}>
-              Go to profile
+            <Link href={isTutor ? '/main/tutor-profile' : '/main/profile'} className={ui.buttonSecondary}>
+              {isTutor ? 'Go to tutor profile' : 'Go to profile'}
             </Link>
           </div>
           <ul className="grid gap-3 sm:grid-cols-2">

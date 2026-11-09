@@ -1,5 +1,6 @@
 import { getCurrentUserProfile, type UserProfile } from '@/lib/profiles';
 import { createClient } from '@/lib/supabase/server';
+import { EMPTY_CONTACT_DETAILS, normalizeContactDetails, type ContactDetails } from '@/lib/tutor-contact';
 import { normalizeTeachingLevels, type TeachingLevel } from '@/lib/tutor-visibility';
 
 export type TutorProfile = {
@@ -9,6 +10,7 @@ export type TutorProfile = {
   yearsExperience: number | null;
   teachingModes: string[];
   teachingLevels: TeachingLevel[];
+  contacts: ContactDetails;
   about: string;
   updatedAt: string | null;
 };
@@ -20,6 +22,10 @@ type TutorProfileRow = {
   years_experience: number | null;
   teaching_modes: string[] | null;
   teaching_levels: string[] | null;
+  contact_instagram: string | null;
+  contact_facebook: string | null;
+  contact_phone: string | null;
+  contact_line: string | null;
   about: string | null;
   updated_at: string | null;
 };
@@ -44,6 +50,7 @@ function buildDefaultTutorProfile(userId: string): TutorProfile {
     yearsExperience: null,
     teachingModes: [],
     teachingLevels: [],
+    contacts: EMPTY_CONTACT_DETAILS,
     about: '',
     updatedAt: null,
   };
@@ -57,6 +64,12 @@ function mapTutorProfileRow(row: TutorProfileRow): TutorProfile {
     yearsExperience: row.years_experience,
     teachingModes: row.teaching_modes ?? [],
     teachingLevels: normalizeTeachingLevels(row.teaching_levels),
+    contacts: normalizeContactDetails({
+      instagram: row.contact_instagram,
+      facebook: row.contact_facebook,
+      phone: row.contact_phone,
+      line: row.contact_line,
+    }),
     about: row.about ?? '',
     updatedAt: row.updated_at,
   };
@@ -80,7 +93,7 @@ export async function getCurrentTutorProfile() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('tutor_profiles')
-    .select('id, headline, hourly_rate, years_experience, teaching_modes, teaching_levels, about, updated_at')
+    .select('id, headline, hourly_rate, years_experience, teaching_modes, teaching_levels, contact_instagram, contact_facebook, contact_phone, contact_line, about, updated_at')
     .eq('id', profileResult.profile.id)
     .maybeSingle<TutorProfileRow>();
 

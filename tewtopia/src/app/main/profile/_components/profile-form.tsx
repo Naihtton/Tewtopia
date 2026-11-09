@@ -1,12 +1,17 @@
 'use client';
 
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import type { UserProfile, UserRole } from '@/lib/profiles';
+import type { TutorChecklist } from '@/lib/tutor-listing';
 import { ui } from '@/lib/ui';
 
 type ProfileFormProps = {
   initialProfile: UserProfile;
   initialError: string | null;
+  // Only for tutors: the Find tutors listing checklist from saved data.
+  tutorChecklist: TutorChecklist | null;
 };
 
 type ProfileState = {
@@ -46,7 +51,12 @@ function addSubject(currentValue: string, subject: string) {
   return [...items, subject].join(', ');
 }
 
-export function ProfileForm({ initialProfile, initialError }: ProfileFormProps) {
+export function ProfileForm({ initialProfile, initialError, tutorChecklist }: ProfileFormProps) {
+  const router = useRouter();
+  // Tutors: "ready" means listed on Find tutors (from saved data), not just a basic profile.
+  const tutorStepsDone = tutorChecklist?.filter((item) => item.done).length ?? 0;
+  const tutorListed = tutorChecklist !== null && tutorStepsDone === tutorChecklist.length;
+  const tutorMissing = tutorChecklist?.filter((item) => !item.done).map((item) => item.label) ?? [];
   const [profile, setProfile] = useState<ProfileState>(() => toFormState(initialProfile));
   const [error, setError] = useState<string | null>(initialError);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
@@ -107,6 +117,8 @@ export function ProfileForm({ initialProfile, initialError }: ProfileFormProps) 
         updatedAt: data.profile?.updated_at ?? null,
       }));
       setSavedMessage('Profile saved.');
+      // Re-read server data so the tutor listing status reflects the save.
+      router.refresh();
     } catch {
       setError('Unable to save profile.');
     } finally {
@@ -120,7 +132,9 @@ export function ProfileForm({ initialProfile, initialError }: ProfileFormProps) 
         <h1 className={`${ui.title} text-4xl md:text-5xl`}>Profile</h1>
         <p className="mt-3 max-w-2xl text-base text-muted">Manage account details, role information, and tutor preferences.</p>
         <div className={`${ui.chipAccent} mt-5`}>
-          Setup progress: {completedCount}/4
+          {tutorChecklist
+            ? `Find tutors: ${tutorStepsDone}/${tutorChecklist.length} steps`
+            : `Setup progress: ${completedCount}/4`}
         </div>
       </div>
 
@@ -236,7 +250,7 @@ export function ProfileForm({ initialProfile, initialError }: ProfileFormProps) 
             </button>
             <p className="text-sm text-muted">
               {profile.role === 'tutor'
-                ? 'After this, complete Tutor Profile to appear ready for students.'
+                ? 'Then finish your Tutor Profile (rate, levels, contact) to appear on Find tutors.'
                 : 'Keep your subjects updated so tutor matching feels relevant.'}
             </p>
           </div>
@@ -272,9 +286,22 @@ export function ProfileForm({ initialProfile, initialError }: ProfileFormProps) 
             </div>
             <div>
               <dt className="text-muted">Status</dt>
-              <dd className="font-medium text-emerald-700">
-                {profile.status === 'profile_ready' ? 'Profile ready' : 'Profile incomplete'}
-              </dd>
+              {tutorChecklist ? (
+                tutorListed ? (
+                  <dd className="font-medium text-emerald-700">Visible on Find tutors</dd>
+                ) : (
+                  <dd className="font-medium text-primary-deep">
+                    Not on Find tutors yet — still needed: {tutorMissing.join(', ').toLowerCase()}.{' '}
+                    <Link href="/main/tutor-profile" className="font-bold underline underline-offset-2">
+                      Open Tutor Profile
+                    </Link>
+                  </dd>
+                )
+              ) : (
+                <dd className={`font-medium ${profile.status === 'profile_ready' ? 'text-emerald-700' : 'text-muted'}`}>
+                  {profile.status === 'profile_ready' ? 'Profile ready' : 'Profile incomplete'}
+                </dd>
+              )}
             </div>
             <div>
               <dt className="text-muted">Last updated</dt>

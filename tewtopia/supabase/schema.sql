@@ -272,6 +272,23 @@ alter table public.tutor_profiles
 add constraint tutor_profiles_teaching_levels_check
 check (teaching_levels <@ array['primary', 'lower_secondary', 'upper_secondary', 'university', 'adult']::text[]);
 
+-- Tutor contact channels. Never exposed by public_tutor_cards; signed-in users
+-- read them one tutor at a time through get_tutor_contacts().
+alter table public.tutor_profiles add column if not exists contact_instagram text not null default '';
+alter table public.tutor_profiles add column if not exists contact_facebook text not null default '';
+alter table public.tutor_profiles add column if not exists contact_phone text not null default '';
+alter table public.tutor_profiles add column if not exists contact_line text not null default '';
+
+alter table public.tutor_profiles drop constraint if exists tutor_profiles_contact_length_check;
+alter table public.tutor_profiles
+add constraint tutor_profiles_contact_length_check
+check (
+  char_length(contact_instagram) <= 100
+  and char_length(contact_facebook) <= 100
+  and char_length(contact_phone) <= 100
+  and char_length(contact_line) <= 100
+);
+
 -- Removed: these exposed whole profiles rows (including email) to any signed-in
 -- user. With open sign-up anyone can be "authenticated", so public tutor data is
 -- served only through public_tutor_cards (below).
@@ -371,10 +388,30 @@ where p.role = 'tutor'
   and t.hourly_rate > 0
   and cardinality(p.preferred_subjects) > 0
   and cardinality(t.teaching_levels) > 0
+  and (t.contact_instagram <> '' or t.contact_facebook <> '' or t.contact_phone <> '' or t.contact_line <> '')
   and coalesce(s.profile_visibility, 'public') <> 'private';
 
 revoke all on public.public_tutor_cards from public, anon, authenticated;
 grant select on public.public_tutor_cards to anon, authenticated;
+
+-- Contact details for one listed tutor, for signed-in users only.
+-- security definer: callers have no direct read access to tutor_profiles.
+create or replace function public.get_tutor_contacts(tutor uuid)
+returns table (instagram text, facebook text, phone text, line text)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select t.contact_instagram, t.contact_facebook, t.contact_phone, t.contact_line
+  from public.tutor_profiles t
+  where t.id = tutor
+    and auth.uid() is not null
+    and exists (select 1 from public.public_tutor_cards c where c.id = tutor);
+$$;
+
+revoke all on function public.get_tutor_contacts(uuid) from public, anon;
+grant execute on function public.get_tutor_contacts(uuid) to authenticated;
 
 -- Subject taxonomy
 create table if not exists public.subjects (
