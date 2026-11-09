@@ -10,6 +10,7 @@ import { ui } from '@/lib/ui';
 export type NavUser = {
   name: string;
   role: UserRole;
+  avatarUrl: string | null;
   // Things waiting on this user, per page.
   badges: Record<NavBadge, number>;
   // Rows the user owns regardless of current role (keeps pages reachable after a role switch).
@@ -81,7 +82,7 @@ export function TopNav({ user }: TopNavProps) {
                   {cta.label}
                 </Link>
               )}
-              <AccountMenu name={user.name} role={user.role} />
+              <AccountMenu name={user.name} role={user.role} avatarUrl={user.avatarUrl} />
             </>
           ) : pathname === '/auth' ? null : (
             <Link href={loginHref} className={ui.buttonSecondary}>

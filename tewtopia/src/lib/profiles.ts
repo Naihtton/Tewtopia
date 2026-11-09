@@ -8,6 +8,8 @@ export type UserProfile = {
   id: string;
   email: string;
   displayName: string;
+  // Public URL in the avatars bucket, or null.
+  avatarUrl: string | null;
   role: UserRole;
   preferredSubjects: string[];
   bio: string;
@@ -21,6 +23,7 @@ type ProfileRow = {
   id: string;
   email: string;
   display_name: string | null;
+  avatar_url: string | null;
   role: UserRole | null;
   preferred_subjects: string[] | null;
   bio: string | null;
@@ -33,6 +36,7 @@ function buildDefaultProfile(user: { id: string; email: string }): UserProfile {
     id: user.id,
     email: user.email,
     displayName: '',
+    avatarUrl: null,
     role: 'student',
     preferredSubjects: [],
     bio: '',
@@ -47,6 +51,7 @@ function mapProfileRow(row: ProfileRow): UserProfile {
     id: row.id,
     email: row.email,
     displayName: row.display_name ?? '',
+    avatarUrl: row.avatar_url,
     role: row.role ?? 'student',
     preferredSubjects: row.preferred_subjects ?? [],
     bio: row.bio ?? '',
@@ -66,7 +71,7 @@ export async function getCurrentUserProfile() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, email, display_name, role, preferred_subjects, bio, status, updated_at')
+    .select('id, email, display_name, avatar_url, role, preferred_subjects, bio, status, updated_at')
     .eq('id', sessionUser.id)
     .maybeSingle<ProfileRow>();
 

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { Avatar } from '@/app/_components/avatar';
 import { LogoutButton } from '@/app/main/_components/logout-button';
 import { accountMenu, type NavRole } from '@/lib/nav-tabs';
 
@@ -10,7 +11,7 @@ const itemClass =
   'block w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-ink-soft transition-colors hover:bg-cream hover:text-ink';
 
 /** The avatar in the top nav: opens Profile / Settings (and Tutor profile) / Log out. */
-export function AccountMenu({ name, role }: { name: string; role: NavRole }) {
+export function AccountMenu({ name, role, avatarUrl }: { name: string; role: NavRole; avatarUrl: string | null }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -45,11 +46,11 @@ export function AccountMenu({ name, role }: { name: string; role: NavRole }) {
         aria-expanded={open}
         aria-label="Account menu"
         onClick={() => setOpen((value) => !value)}
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-sm font-extrabold uppercase text-primary-deep outline-none transition-shadow hover:ring-2 hover:ring-primary/40 focus-visible:ring-2 focus-visible:ring-primary ${
+        className={`shrink-0 rounded-full outline-none transition-shadow hover:ring-2 hover:ring-primary/40 focus-visible:ring-2 focus-visible:ring-primary ${
           onAccountPage || open ? 'ring-2 ring-primary' : ''
         }`}
       >
-        {name.slice(0, 1)}
+        <Avatar name={name} url={avatarUrl} />
       </button>
 
       {open && (

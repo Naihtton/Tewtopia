@@ -183,3 +183,55 @@ test('student contacts: own row only, length-checked', async () => {
   assert.equal((await rows(db, `select * from public.student_profiles`)).length, 0);
   await reset(db);
 });
+
+const avatarUrl = (owner, file = '1.webp') => `https://abc.supabase.co/storage/v1/object/public/avatars/${owner}/${file}`;
+
+test('avatars bucket: public, 5MB, images only', async () => {
+  await reset(db);
+  const [bucket] = await rows(db, `select * from storage.buckets where id = 'avatars'`);
+  assert.ok(bucket, 'bucket exists');
+  assert.equal(bucket.public, true);
+  assert.equal(Number(bucket.file_size_limit), 5 * 1024 * 1024);
+  assert.deepEqual(bucket.allowed_mime_types, ['image/jpeg', 'image/png', 'image/webp']);
+});
+
+test('avatars: users write only inside their own folder', async () => {
+  await as(db, 'anon');
+  assert.ok(await errorOf(db, `insert into storage.objects (bucket_id, name) values ('avatars', $1)`, [`${S}/a.webp`]), 'anon cannot upload');
+
+  await as(db, 'authenticated', S);
+  assert.equal(await errorOf(db, `insert into storage.objects (bucket_id, name) values ('avatars', $1)`, [`${S}/a.webp`]), null);
+  assert.ok(await errorOf(db, `insert into storage.objects (bucket_id, name) values ('avatars', $1)`, [`${T}/a.webp`]), 'not into another user’s folder');
+  assert.ok(await errorOf(db, `insert into storage.objects (bucket_id, name) values ('avatars', 'a.webp')`), 'not at the bucket root');
+
+  await as(db, 'authenticated', T);
+  await db.query(`delete from storage.objects where name = $1`, [`${S}/a.webp`]);
+  await reset(db);
+  assert.equal((await rows(db, `select 1 from storage.objects where name = $1`, [`${S}/a.webp`])).length, 1, 'others cannot delete it');
+
+  await as(db, 'authenticated', S);
+  await db.query(`delete from storage.objects where name = $1`, [`${S}/a.webp`]);
+  await reset(db);
+  assert.equal((await rows(db, `select 1 from storage.objects where name = $1`, [`${S}/a.webp`])).length, 0, 'owner can delete it');
+});
+
+test('profiles.avatar_url must point at the user’s own avatar folder', async () => {
+  await as(db, 'authenticated', S);
+  assert.equal(await errorOf(db, `update public.profiles set avatar_url = $1 where id = $2`, [avatarUrl(S), S]), null);
+  assert.equal(await errorOf(db, `update public.profiles set avatar_url = null where id = $1`, [S]), null);
+  assert.match(await errorOf(db, `update public.profiles set avatar_url = $1 where id = $2`, [avatarUrl(T), S]), /avatar/i);
+  assert.match(await errorOf(db, `update public.profiles set avatar_url = $1 where id = $2`, ['https://evil.com/x.png', S]), /avatar/i);
+  assert.match(
+    await errorOf(db, `update public.profiles set avatar_url = $1 where id = $2`, [avatarUrl(S, '../x.webp'), S]),
+    /avatar/i,
+  );
+});
+
+test('public_tutor_cards exposes the tutor avatar', async () => {
+  await reset(db);
+  await db.query(`update public.profiles set avatar_url = $1 where id = $2`, [avatarUrl(T), T]);
+  await as(db, 'anon');
+  const [card] = await listed();
+  assert.equal(card.avatar_url, avatarUrl(T));
+  await reset(db);
+});

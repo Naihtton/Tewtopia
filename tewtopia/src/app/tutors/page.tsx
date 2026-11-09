@@ -78,7 +78,7 @@ export default async function TutorsPage({ searchParams }: TutorsPageProps) {
   if (profileResult) {
     const { profile } = profileResult;
     return (
-      <MainShell username={profile.displayName || profile.email} role={profile.role}>
+      <MainShell username={profile.displayName || profile.email} role={profile.role} avatarUrl={profile.avatarUrl}>
         {content}
       </MainShell>
     );

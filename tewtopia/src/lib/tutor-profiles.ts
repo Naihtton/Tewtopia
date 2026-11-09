@@ -43,6 +43,7 @@ export type BrowseTutorCard = {
   rateMin: number | null;
   rateMax: number | null;
   yearsExperience: number | null;
+  avatarUrl: string | null;
 };
 
 function buildDefaultTutorProfile(userId: string): TutorProfile {
@@ -129,10 +130,11 @@ type PublicTutorCardRow = {
   hourly_rate_max: number | null;
   years_experience: number | null;
   bio: string | null;
+  avatar_url: string | null;
 };
 
 const PUBLIC_TUTOR_COLUMNS =
-  'id, display_name, headline, about, subjects, teaching_levels, teaching_modes, hourly_rate_min, hourly_rate_max, years_experience, bio';
+  'id, display_name, headline, about, subjects, teaching_levels, teaching_modes, hourly_rate_min, hourly_rate_max, years_experience, bio, avatar_url';
 
 function mapPublicTutorCard(row: PublicTutorCardRow): BrowseTutorCard {
   return {
@@ -146,6 +148,7 @@ function mapPublicTutorCard(row: PublicTutorCardRow): BrowseTutorCard {
     rateMin: row.hourly_rate_min,
     rateMax: row.hourly_rate_max,
     yearsExperience: row.years_experience,
+    avatarUrl: row.avatar_url,
   };
 }
 

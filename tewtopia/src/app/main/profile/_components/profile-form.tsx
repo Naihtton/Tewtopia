@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { AvatarUploader } from '@/app/main/profile/_components/avatar-uploader';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { CONTACT_CHANNELS, type ContactChannel, type ContactDetails } from '@/lib/contact';
@@ -165,6 +166,14 @@ export function ProfileForm({ initialProfile, initialError, tutorChecklist }: Pr
           {savedMessage}
         </div>
       )}
+
+      <section className={`${ui.panel} p-6`}>
+        <h2 className={ui.label}>Profile photo</h2>
+        <AvatarUploader userId={initialProfile.id} name={profile.displayName} initialUrl={initialProfile.avatarUrl} />
+        {profile.role === 'student' && (
+          <p className="mt-3 text-xs text-muted">Your photo appears in your account menu. It isn&apos;t shown on the public request board.</p>
+        )}
+      </section>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr),minmax(18rem,1fr)]">
         <form onSubmit={handleSubmit} className={`${ui.panel} space-y-6 p-6`}>

@@ -425,7 +425,8 @@ select
   t.hourly_rate_min,
   t.hourly_rate_max,
   t.years_experience,
-  p.bio
+  p.bio,
+  p.avatar_url
 from public.profiles p
 join public.tutor_profiles t on t.id = p.id
 left join public.user_settings s on s.id = p.id
@@ -1168,3 +1169,55 @@ grant execute on function public.decline_offer(uuid) to authenticated;
 grant execute on function public.confirm_deal(uuid) to authenticated;
 grant execute on function public.get_offer_counterpart(uuid) to authenticated;
 grant execute on function public.my_attention_counts() to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Profile photos: public bucket "avatars", one folder per user ("<user id>/<file>").
+-- Images are resized to 512px WebP in the browser before upload (src/lib/avatar.ts).
+-- ---------------------------------------------------------------------------
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('avatars', 'avatars', true, 5242880, array['image/jpeg', 'image/png', 'image/webp'])
+on conflict (id) do update
+set public = excluded.public,
+    file_size_limit = excluded.file_size_limit,
+    allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "Users can upload own avatar" on storage.objects;
+create policy "Users can upload own avatar"
+on storage.objects for insert to authenticated
+with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+drop policy if exists "Users can see own avatar files" on storage.objects;
+create policy "Users can see own avatar files"
+on storage.objects for select to authenticated
+using (bucket_id = 'avatars' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+drop policy if exists "Users can update own avatar" on storage.objects;
+create policy "Users can update own avatar"
+on storage.objects for update to authenticated
+using (bucket_id = 'avatars' and (storage.foldername(name))[1] = (select auth.uid())::text)
+with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+drop policy if exists "Users can delete own avatar" on storage.objects;
+create policy "Users can delete own avatar"
+on storage.objects for delete to authenticated
+using (bucket_id = 'avatars' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+-- profiles.avatar_url may only point at the user's own file in the avatars bucket
+-- (no hot-linked images from other sites, no other users' photos).
+create or replace function public.check_avatar_url()
+returns trigger language plpgsql as $$
+begin
+  if new.avatar_url is not null
+     and new.avatar_url !~ ('^https?://[^/]+/storage/v1/object/public/avatars/' || new.id::text || '/[A-Za-z0-9_-]+\.(webp|png|jpe?g)$') then
+    raise exception 'Invalid avatar URL';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists check_avatar_url on public.profiles;
+create trigger check_avatar_url
+before insert or update of avatar_url on public.profiles
+for each row
+execute function public.check_avatar_url();

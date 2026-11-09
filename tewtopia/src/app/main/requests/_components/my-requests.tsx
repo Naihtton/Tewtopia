@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { Avatar } from '@/app/_components/avatar';
 import { Modal } from '@/app/_components/modal';
 import { RequestSummary } from '@/app/_components/request-summary';
 import { CounterpartContacts } from '@/app/main/_components/counterpart-contacts';
@@ -108,7 +109,8 @@ function OfferRow({
   return (
     <li className="rounded-2xl bg-cream px-4 py-3">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          {offer.tutor && <Avatar name={offer.tutor.displayName} url={offer.tutor.avatarUrl} className="h-8 w-8 text-xs" />}
           {offer.tutor ? (
             <button
               type="button"
