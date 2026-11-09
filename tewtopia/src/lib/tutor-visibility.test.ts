@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { missingTutorFields, normalizeTeachingLevels, TEACHING_LEVELS, tutorListingStatus } from './tutor-visibility.ts';
 
-const complete = { displayName: 'Pim', hourlyRate: 500, subjects: ['Math'], teachingLevels: ['primary'] };
+const complete = { displayName: 'Pim', hourlyRate: 500, subjects: ['Math'], teachingLevels: ['primary'], hasContact: true };
 
 test('complete tutor has nothing missing', () => {
   assert.deepEqual(missingTutorFields(complete), []);
@@ -10,8 +10,8 @@ test('complete tutor has nothing missing', () => {
 
 test('reports each missing field in order', () => {
   assert.deepEqual(
-    missingTutorFields({ displayName: '  ', hourlyRate: 0, subjects: [], teachingLevels: [] }),
-    ['display name', 'hourly rate', 'subjects', 'teaching levels'],
+    missingTutorFields({ displayName: '  ', hourlyRate: 0, subjects: [], teachingLevels: [], hasContact: false }),
+    ['display name', 'hourly rate', 'subjects', 'teaching levels', 'contact details'],
   );
 });
 
@@ -53,4 +53,8 @@ test('tutorListingStatus: public, matched_only and missing settings are listed w
 
 test('tutorListingStatus: incomplete is not listed', () => {
   assert.equal(tutorListingStatus({ ...complete, hourlyRate: 0, visibility: 'public' }).listed, false);
+});
+
+test('no contact details hides the tutor', () => {
+  assert.deepEqual(missingTutorFields({ ...complete, hasContact: false }), ['contact details']);
 });

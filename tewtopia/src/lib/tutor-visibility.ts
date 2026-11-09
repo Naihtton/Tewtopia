@@ -11,7 +11,7 @@ export const TEACHING_LEVELS: readonly { value: TeachingLevel; label: string }[]
   { value: 'adult', label: 'Adult learners' },
 ];
 
-export type MissingTutorField = 'display name' | 'hourly rate' | 'subjects' | 'teaching levels';
+export type MissingTutorField = 'display name' | 'hourly rate' | 'subjects' | 'teaching levels' | 'contact details';
 
 export function normalizeTeachingLevels(values: unknown): TeachingLevel[] {
   if (!Array.isArray(values)) {
@@ -27,6 +27,7 @@ export function missingTutorFields(input: {
   hourlyRate: number | null;
   subjects: string[];
   teachingLevels: string[];
+  hasContact: boolean;
 }): MissingTutorField[] {
   const missing: MissingTutorField[] = [];
 
@@ -34,6 +35,7 @@ export function missingTutorFields(input: {
   if (input.hourlyRate === null || !(input.hourlyRate > 0)) missing.push('hourly rate');
   if (input.subjects.length === 0) missing.push('subjects');
   if (normalizeTeachingLevels(input.teachingLevels).length === 0) missing.push('teaching levels');
+  if (!input.hasContact) missing.push('contact details');
 
   return missing;
 }
