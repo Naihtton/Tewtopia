@@ -25,9 +25,6 @@ export function navTabs(role: NavRole | null, owns: { hasRequests: boolean; hasO
       { href: '/requests', label: 'Request board' },
       MY_OFFERS,
       ...(owns.hasRequests ? [MY_REQUESTS] : []),
-      // The tutor's basic Profile is linked from the Tutor profile page.
-      { href: '/main/tutor-profile', label: 'Tutor profile' },
-      { href: '/main/settings', label: 'Settings' },
     ];
   }
 
@@ -36,6 +33,13 @@ export function navTabs(role: NavRole | null, owns: { hasRequests: boolean; hasO
     { href: '/tutors', label: 'Find tutors' },
     MY_REQUESTS,
     ...(owns.hasOffers ? [MY_OFFERS] : []),
+  ];
+}
+
+/** Account pages, shown in the menu under the avatar rather than as tabs. */
+export function accountMenu(role: NavRole): { href: string; label: string }[] {
+  return [
+    ...(role === 'tutor' ? [{ href: '/main/tutor-profile', label: 'Tutor profile' }] : []),
     { href: '/main/profile', label: 'Profile' },
     { href: '/main/settings', label: 'Settings' },
   ];

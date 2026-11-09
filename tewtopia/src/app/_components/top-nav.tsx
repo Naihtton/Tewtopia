@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LogoutButton } from '@/app/main/_components/logout-button';
+import { AccountMenu } from '@/app/_components/account-menu';
 import { navTabs, type NavBadge } from '@/lib/nav-tabs';
 import type { UserRole } from '@/lib/profiles';
 import { ui } from '@/lib/ui';
@@ -81,13 +81,7 @@ export function TopNav({ user }: TopNavProps) {
                   {cta.label}
                 </Link>
               )}
-              <span
-                title={user.name}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-sm font-extrabold uppercase text-primary-deep"
-              >
-                {user.name.slice(0, 1)}
-              </span>
-              <LogoutButton />
+              <AccountMenu name={user.name} role={user.role} />
             </>
           ) : pathname === '/auth' ? null : (
             <Link href={loginHref} className={ui.buttonSecondary}>

@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { isSupabaseConfigured } from '@/lib/supabase/config';
 
-export function LogoutButton() {
+export function LogoutButton({ className }: { className?: string }) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -32,7 +32,10 @@ export function LogoutButton() {
       type="button"
       onClick={handleLogout}
       disabled={isSubmitting}
-      className="shrink-0 rounded-full px-3 py-2 text-sm font-bold text-muted transition-colors hover:bg-cream hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
+      className={
+        className ??
+        'shrink-0 rounded-full px-3 py-2 text-sm font-bold text-muted transition-colors hover:bg-cream hover:text-ink disabled:cursor-not-allowed disabled:opacity-60'
+      }
     >
       {isSubmitting ? 'Signing out...' : 'Log out'}
     </button>
