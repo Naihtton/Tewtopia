@@ -751,3 +751,367 @@ from (
     ('sat-prep', 'SAT Prep', 'Exam Prep')
 ) as seed(slug, name, category)
 where not exists (select 1 from public.subjects);
+
+-- ---------------------------------------------------------------------------
+-- Request board: students post what they need, listed tutors send one offer
+-- (a single hourly price) per post. All writes go through the functions below;
+-- the tables have read-only RLS. No budget field by design (avoids a price norm).
+-- ---------------------------------------------------------------------------
+
+create table if not exists public.student_requests (
+  id uuid primary key default gen_random_uuid(),
+  student_user_id uuid not null references public.profiles (id) on delete cascade,
+  subjects text[] not null,
+  teaching_levels text[] not null,
+  teaching_modes text[] not null,
+  details text not null default '',
+  schedule text not null,
+  status text not null default 'open' check (status in ('open', 'closed', 'cancelled')),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  constraint student_requests_fields_check check (
+    cardinality(subjects) > 0
+    and cardinality(teaching_levels) > 0
+    and cardinality(teaching_modes) > 0
+    and teaching_levels <@ array['primary', 'lower_secondary', 'upper_secondary', 'university', 'adult']::text[]
+    and teaching_modes <@ array['online', 'in_person', 'group', 'hybrid']::text[]
+    and char_length(btrim(schedule)) between 1 and 200
+    and char_length(details) <= 1000
+  )
+);
+
+create index if not exists student_requests_student_idx on public.student_requests (student_user_id);
+
+drop trigger if exists set_student_requests_updated_at on public.student_requests;
+create trigger set_student_requests_updated_at
+before update on public.student_requests
+for each row
+execute function public.set_updated_at();
+
+create table if not exists public.request_offers (
+  id uuid primary key default gen_random_uuid(),
+  request_id uuid not null references public.student_requests (id) on delete cascade,
+  tutor_user_id uuid not null references public.tutor_profiles (id) on delete cascade,
+  hourly_rate integer not null check (hourly_rate >= 250),
+  status text not null default 'pending'
+    check (status in ('pending', 'accepted', 'declined', 'deal_done', 'closed', 'withdrawn')),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (request_id, tutor_user_id)
+);
+
+create index if not exists request_offers_request_idx on public.request_offers (request_id);
+create index if not exists request_offers_tutor_idx on public.request_offers (tutor_user_id);
+
+drop trigger if exists set_request_offers_updated_at on public.request_offers;
+create trigger set_request_offers_updated_at
+before update on public.request_offers
+for each row
+execute function public.set_updated_at();
+
+-- RLS helpers. The two tables' policies refer to each other; going through
+-- security definer functions avoids infinite policy recursion.
+create or replace function public.is_request_owner(p_request uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.student_requests r where r.id = p_request and r.student_user_id = auth.uid());
+$$;
+
+create or replace function public.has_offer_on(p_request uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.request_offers o where o.request_id = p_request and o.tutor_user_id = auth.uid());
+$$;
+
+alter table public.student_requests enable row level security;
+alter table public.request_offers enable row level security;
+
+drop policy if exists "Students can view own requests" on public.student_requests;
+create policy "Students can view own requests"
+on public.student_requests for select to authenticated
+using ((select auth.uid()) = student_user_id);
+
+drop policy if exists "Tutors can view requests they offered on" on public.student_requests;
+create policy "Tutors can view requests they offered on"
+on public.student_requests for select to authenticated
+using (public.has_offer_on(id));
+
+drop policy if exists "Tutors can view own offers" on public.request_offers;
+create policy "Tutors can view own offers"
+on public.request_offers for select to authenticated
+using ((select auth.uid()) = tutor_user_id);
+
+drop policy if exists "Students can view offers on own requests" on public.request_offers;
+create policy "Students can view offers on own requests"
+on public.request_offers for select to authenticated
+using (public.is_request_owner(request_id));
+
+-- Public board: open posts only, nothing that identifies the student, and only
+-- the number of offers (never their prices). Runs with owner rights, like public_tutor_cards.
+create or replace view public.public_request_cards as
+select
+  r.id,
+  r.subjects,
+  r.teaching_levels,
+  r.teaching_modes,
+  r.details,
+  r.schedule,
+  r.created_at,
+  (
+    select count(*)::int
+    from public.request_offers o
+    where o.request_id = r.id and o.status in ('pending', 'accepted')
+  ) as offer_count
+from public.student_requests r
+where r.status = 'open';
+
+revoke all on public.public_request_cards from public, anon, authenticated;
+grant select on public.public_request_cards to anon, authenticated;
+
+create or replace function public.create_request(
+  p_subjects text[],
+  p_teaching_levels text[],
+  p_details text,
+  p_schedule text,
+  p_teaching_modes text[]
+)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare
+  uid uuid := auth.uid();
+  new_id uuid;
+begin
+  if uid is null then
+    raise exception 'Not signed in';
+  end if;
+  if not exists (select 1 from public.profiles where id = uid and role = 'student') then
+    raise exception 'Only students can post requests';
+  end if;
+  if not exists (
+    select 1 from public.student_profiles sp
+    where sp.user_id = uid
+      and (sp.contact_instagram <> '' or sp.contact_facebook <> '' or sp.contact_phone <> '' or sp.contact_line <> '')
+  ) then
+    raise exception 'Add at least one contact channel before posting';
+  end if;
+  if exists (select 1 from unnest(p_subjects) s where s not in (select name from public.subjects)) then
+    raise exception 'Unknown subject';
+  end if;
+
+  insert into public.student_requests (student_user_id, subjects, teaching_levels, teaching_modes, details, schedule)
+  values (uid, p_subjects, p_teaching_levels, p_teaching_modes, btrim(coalesce(p_details, '')), btrim(coalesce(p_schedule, '')))
+  returning id into new_id;
+
+  return new_id;
+end;
+$$;
+
+create or replace function public.cancel_request(p_request uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  update public.student_requests
+  set status = 'cancelled'
+  where id = p_request and student_user_id = auth.uid() and status = 'open';
+  if not found then
+    raise exception 'Request is no longer open';
+  end if;
+
+  update public.request_offers
+  set status = 'closed'
+  where request_id = p_request and status in ('pending', 'accepted');
+end;
+$$;
+
+create or replace function public.submit_offer(p_request uuid, p_rate integer)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare
+  uid uuid := auth.uid();
+  req record;
+  existing record;
+  offer_id uuid;
+begin
+  if uid is null or not exists (select 1 from public.public_tutor_cards c where c.id = uid) then
+    raise exception 'Finish your tutor profile to send offers';
+  end if;
+  if p_rate is null or p_rate < 250 then
+    raise exception 'The minimum rate is 250 THB/hr';
+  end if;
+
+  select student_user_id, status into req from public.student_requests where id = p_request for update;
+  if not found or req.status <> 'open' then
+    raise exception 'This request is no longer open';
+  end if;
+  if req.student_user_id = uid then
+    raise exception 'You cannot make an offer on your own request';
+  end if;
+
+  select id, status into existing
+  from public.request_offers
+  where request_id = p_request and tutor_user_id = uid
+  for update;
+
+  if not found then
+    insert into public.request_offers (request_id, tutor_user_id, hourly_rate)
+    values (p_request, uid, p_rate)
+    returning id into offer_id;
+    return offer_id;
+  end if;
+
+  if existing.status in ('pending', 'withdrawn') then
+    update public.request_offers set hourly_rate = p_rate, status = 'pending' where id = existing.id;
+    return existing.id;
+  end if;
+
+  raise exception 'You already have an offer on this request';
+end;
+$$;
+
+create or replace function public.withdraw_offer(p_offer uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  update public.request_offers
+  set status = 'withdrawn'
+  where id = p_offer and tutor_user_id = auth.uid() and status = 'pending';
+  if not found then
+    raise exception 'Offer is no longer pending';
+  end if;
+end;
+$$;
+
+create or replace function public.accept_offer(p_offer uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  o record;
+begin
+  select ro.request_id, ro.tutor_user_id, r.student_user_id
+  into o
+  from public.request_offers ro
+  join public.student_requests r on r.id = ro.request_id
+  where ro.id = p_offer;
+
+  if not found or o.student_user_id <> auth.uid() then
+    raise exception 'Offer not found';
+  end if;
+  if not exists (select 1 from public.public_tutor_cards c where c.id = o.tutor_user_id) then
+    raise exception 'This tutor is no longer available';
+  end if;
+
+  perform 1 from public.student_requests where id = o.request_id and status = 'open' for update;
+  if not found then
+    raise exception 'Request is no longer open';
+  end if;
+
+  update public.request_offers set status = 'accepted' where id = p_offer and status = 'pending';
+  if not found then
+    raise exception 'Offer is no longer pending';
+  end if;
+end;
+$$;
+
+create or replace function public.decline_offer(p_offer uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  update public.request_offers ro
+  set status = 'declined'
+  where ro.id = p_offer
+    and ro.status in ('pending', 'accepted')
+    and public.is_request_owner(ro.request_id);
+  if not found then
+    raise exception 'Offer can no longer be declined';
+  end if;
+end;
+$$;
+
+create or replace function public.confirm_deal(p_offer uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  o record;
+begin
+  select ro.request_id, ro.tutor_user_id, r.student_user_id
+  into o
+  from public.request_offers ro
+  join public.student_requests r on r.id = ro.request_id
+  where ro.id = p_offer;
+
+  if not found or auth.uid() not in (o.student_user_id, o.tutor_user_id) then
+    raise exception 'Offer not found';
+  end if;
+
+  -- Lock the request so two deals on the same post cannot both succeed.
+  perform 1 from public.student_requests where id = o.request_id and status = 'open' for update;
+  if not found then
+    raise exception 'Request is no longer open';
+  end if;
+
+  update public.request_offers set status = 'deal_done' where id = p_offer and status = 'accepted';
+  if not found then
+    raise exception 'Offer is no longer accepted';
+  end if;
+
+  update public.student_requests set status = 'closed' where id = o.request_id;
+  update public.request_offers
+  set status = 'closed'
+  where request_id = o.request_id and id <> p_offer and status in ('pending', 'accepted');
+end;
+$$;
+
+-- The other party of an accepted offer: the tutor (for the student) or the
+-- student (for the tutor), with their contact channels. Nothing before accept.
+create or replace function public.get_offer_counterpart(p_offer uuid)
+returns table (display_name text, instagram text, facebook text, phone text, line text)
+language sql stable security definer set search_path = public as $$
+  select coalesce(p.display_name, ''), t.contact_instagram, t.contact_facebook, t.contact_phone, t.contact_line
+  from public.request_offers o
+  join public.student_requests r on r.id = o.request_id
+  join public.profiles p on p.id = o.tutor_user_id
+  join public.tutor_profiles t on t.id = o.tutor_user_id
+  where o.id = p_offer and o.status in ('accepted', 'deal_done') and r.student_user_id = auth.uid()
+  union all
+  select coalesce(p.display_name, ''),
+    coalesce(sp.contact_instagram, ''), coalesce(sp.contact_facebook, ''),
+    coalesce(sp.contact_phone, ''), coalesce(sp.contact_line, '')
+  from public.request_offers o
+  join public.student_requests r on r.id = o.request_id
+  join public.profiles p on p.id = r.student_user_id
+  left join public.student_profiles sp on sp.user_id = r.student_user_id
+  where o.id = p_offer and o.status in ('accepted', 'deal_done') and o.tutor_user_id = auth.uid();
+$$;
+
+-- Numbers for the nav badges.
+create or replace function public.my_attention_counts()
+returns table (pending_offers int, accepted_offers int)
+language sql stable security definer set search_path = public as $$
+  select
+    (
+      select count(*)::int
+      from public.request_offers o
+      join public.student_requests r on r.id = o.request_id
+      where r.student_user_id = auth.uid() and r.status = 'open' and o.status = 'pending'
+    ),
+    (
+      select count(*)::int
+      from public.request_offers o
+      where o.tutor_user_id = auth.uid() and o.status = 'accepted'
+    );
+$$;
+
+revoke all on function public.is_request_owner(uuid) from public, anon;
+revoke all on function public.has_offer_on(uuid) from public, anon;
+revoke all on function public.create_request(text[], text[], text, text, text[]) from public, anon;
+revoke all on function public.cancel_request(uuid) from public, anon;
+revoke all on function public.submit_offer(uuid, integer) from public, anon;
+revoke all on function public.withdraw_offer(uuid) from public, anon;
+revoke all on function public.accept_offer(uuid) from public, anon;
+revoke all on function public.decline_offer(uuid) from public, anon;
+revoke all on function public.confirm_deal(uuid) from public, anon;
+revoke all on function public.get_offer_counterpart(uuid) from public, anon;
+revoke all on function public.my_attention_counts() from public, anon;
+
+grant execute on function public.is_request_owner(uuid) to authenticated;
+grant execute on function public.has_offer_on(uuid) to authenticated;
+grant execute on function public.create_request(text[], text[], text, text, text[]) to authenticated;
+grant execute on function public.cancel_request(uuid) to authenticated;
+grant execute on function public.submit_offer(uuid, integer) to authenticated;
+grant execute on function public.withdraw_offer(uuid) to authenticated;
+grant execute on function public.accept_offer(uuid) to authenticated;
+grant execute on function public.decline_offer(uuid) to authenticated;
+grant execute on function public.confirm_deal(uuid) to authenticated;
+grant execute on function public.get_offer_counterpart(uuid) to authenticated;
+grant execute on function public.my_attention_counts() to authenticated;
