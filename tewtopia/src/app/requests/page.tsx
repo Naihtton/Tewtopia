@@ -59,7 +59,9 @@ export default async function RequestsPage({ searchParams }: RequestsPageProps) 
                 { name: 'mode', label: 'Learning mode', anyLabel: 'Any mode', options: [...TEACHING_MODES] },
                 { name: 'day', label: 'Day', anyLabel: 'Any day', options: [...DAYS] },
               ]}
+              search={{ name: 'q', placeholder: 'Search by student name or details' }}
               values={{
+                q: filters.q ?? '',
                 subject: filters.subject ?? '',
                 level: filters.level ?? '',
                 mode: filters.mode ?? '',

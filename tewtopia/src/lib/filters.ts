@@ -3,8 +3,11 @@
 import { DAYS, TEACHING_MODES, type Day, type ScheduleSlot, type TeachingMode } from './requests.ts';
 import { normalizeTeachingLevels, type TeachingLevel } from './tutor-visibility.ts';
 
-export type TutorFilters = { subject?: string; level?: TeachingLevel; mode?: TeachingMode; maxRate?: number };
-export type RequestFilters = { subject?: string; level?: TeachingLevel; mode?: TeachingMode; day?: Day };
+// q = free-text search: tutor name / headline, or student name / request details.
+export type TutorFilters = { q?: string; subject?: string; level?: TeachingLevel; mode?: TeachingMode; maxRate?: number };
+export type RequestFilters = { q?: string; subject?: string; level?: TeachingLevel; mode?: TeachingMode; day?: Day };
+
+const Q_MAX = 100;
 
 type Params = Record<string, string | string[] | undefined>;
 
@@ -49,6 +52,7 @@ function compact<T extends Record<string, unknown>>(object: T): T {
 export function parseTutorFilters(params: Params): TutorFilters {
   const maxRate = Number(first(params.maxRate));
   return compact({
+    q: first(params.q).slice(0, Q_MAX) || undefined,
     subject: first(params.subject) || undefined,
     level: parseLevel(first(params.level)),
     mode: parseMode(first(params.mode)),
@@ -59,6 +63,7 @@ export function parseTutorFilters(params: Params): TutorFilters {
 export function parseRequestFilters(params: Params): RequestFilters {
   const day = first(params.day);
   return compact({
+    q: first(params.q).slice(0, Q_MAX) || undefined,
     subject: first(params.subject) || undefined,
     level: parseLevel(first(params.level)),
     mode: parseMode(first(params.mode)),
@@ -71,12 +76,18 @@ export function hasActiveFilters(filters: TutorFilters | RequestFilters): boolea
 }
 
 const sameText = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+const contains = (haystacks: string[], needle: string) => {
+  const query = needle.toLowerCase();
+  return haystacks.some((text) => text.toLowerCase().includes(query));
+};
 
 function modeOf(label: string): TeachingMode | undefined {
   return MODE_ALIASES[label.trim().toLowerCase()];
 }
 
 type FilterableTutor = {
+  displayName: string;
+  headline: string;
   preferredSubjects: string[];
   teachingLevels: string[];
   teachingModes: string[];
@@ -86,6 +97,7 @@ type FilterableTutor = {
 export function filterTutors<T extends FilterableTutor>(tutors: T[], filters: TutorFilters): T[] {
   return tutors.filter(
     (tutor) =>
+      (!filters.q || contains([tutor.displayName, tutor.headline], filters.q)) &&
       (!filters.subject || tutor.preferredSubjects.some((subject) => sameText(subject, filters.subject!))) &&
       (!filters.level || tutor.teachingLevels.includes(filters.level)) &&
       (!filters.mode || tutor.teachingModes.some((mode) => modeOf(mode) === filters.mode)) &&
@@ -95,6 +107,8 @@ export function filterTutors<T extends FilterableTutor>(tutors: T[], filters: Tu
 }
 
 type FilterableRequest = {
+  studentName: string;
+  details: string;
   subjects: string[];
   teachingLevels: string[];
   teachingModes: string[];
@@ -104,6 +118,7 @@ type FilterableRequest = {
 export function filterRequests<T extends FilterableRequest>(requests: T[], filters: RequestFilters): T[] {
   return requests.filter(
     (request) =>
+      (!filters.q || contains([request.studentName, request.details], filters.q)) &&
       (!filters.subject || request.subjects.some((subject) => sameText(subject, filters.subject!))) &&
       (!filters.level || request.teachingLevels.includes(filters.level)) &&
       (!filters.mode || request.teachingModes.includes(filters.mode)) &&

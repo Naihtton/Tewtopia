@@ -51,8 +51,10 @@ export default async function TutorsPage({ searchParams }: TutorsPageProps) {
               { name: 'level', label: 'Level', anyLabel: 'Any level', options: [...TEACHING_LEVELS] },
               { name: 'mode', label: 'Teaching mode', anyLabel: 'Any mode', options: [...TEACHING_MODES] },
             ]}
+            search={{ name: 'q', placeholder: 'Search tutors by name or headline' }}
             number={{ name: 'maxRate', label: 'Max', placeholder: 'any' }}
             values={{
+              q: filters.q ?? '',
               subject: filters.subject ?? '',
               level: filters.level ?? '',
               mode: filters.mode ?? '',

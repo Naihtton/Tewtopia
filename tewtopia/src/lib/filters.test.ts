@@ -10,14 +10,14 @@ import {
 } from './filters.ts';
 
 const tutors = [
-  { id: 'a', preferredSubjects: ['Mathematics', 'Physics'], teachingLevels: ['primary'], teachingModes: ['Online'], rateMin: 300, rateMax: 500 },
-  { id: 'b', preferredSubjects: ['english'], teachingLevels: ['university', 'adult'], teachingModes: ['In person', 'Group class'], rateMin: 600, rateMax: 600 },
-  { id: 'c', preferredSubjects: ['Physics'], teachingLevels: ['upper_secondary'], teachingModes: ['hybrid'], rateMin: 250, rateMax: 400 },
+  { id: 'a', displayName: 'Pim S.', headline: 'IB Math coach', preferredSubjects: ['Mathematics', 'Physics'], teachingLevels: ['primary'], teachingModes: ['Online'], rateMin: 300, rateMax: 500 },
+  { id: 'b', displayName: 'ครูนก', headline: 'English for adults', preferredSubjects: ['english'], teachingLevels: ['university', 'adult'], teachingModes: ['In person', 'Group class'], rateMin: 600, rateMax: 600 },
+  { id: 'c', displayName: 'Krit', headline: 'Physics made simple', preferredSubjects: ['Physics'], teachingLevels: ['upper_secondary'], teachingModes: ['hybrid'], rateMin: 250, rateMax: 400 },
 ];
 
 const requests = [
-  { id: 'r1', subjects: ['Mathematics'], teachingLevels: ['upper_secondary'], teachingModes: ['online'], scheduleSlots: [{ day: 'mon', start: '15:30', end: '16:30' }] },
-  { id: 'r2', subjects: ['English'], teachingLevels: ['primary'], teachingModes: ['in_person', 'group'], scheduleSlots: [{ day: 'sat', start: '09:00', end: '11:00' }, { day: 'sun', start: '09:00', end: '10:00' }] },
+  { id: 'r1', studentName: 'Nok', details: 'Derivatives for midterm', subjects: ['Mathematics'], teachingLevels: ['upper_secondary'], teachingModes: ['online'], scheduleSlots: [{ day: 'mon', start: '15:30', end: '16:30' }] },
+  { id: 'r2', studentName: 'มายด์', details: '', subjects: ['English'], teachingLevels: ['primary'], teachingModes: ['in_person', 'group'], scheduleSlots: [{ day: 'sat', start: '09:00', end: '11:00' }, { day: 'sun', start: '09:00', end: '10:00' }] },
 ];
 
 const ids = (items: { id: string }[]) => items.map((item) => item.id);
@@ -83,4 +83,24 @@ test('subjectOptions: distinct, case-insensitive, sorted, first spelling wins', 
 test('hasActiveFilters', () => {
   assert.equal(hasActiveFilters({}), false);
   assert.equal(hasActiveFilters({ subject: 'Physics' }), true);
+});
+
+test('parse: q is trimmed, empty dropped, capped at 100 chars', () => {
+  assert.deepEqual(parseTutorFilters({ q: '  pim  ' }), { q: 'pim' });
+  assert.deepEqual(parseRequestFilters({ q: '   ' }), {});
+  assert.equal(parseTutorFilters({ q: 'x'.repeat(150) }).q?.length, 100);
+});
+
+test('filterTutors: q matches name or headline, case-insensitive, Thai too', () => {
+  assert.deepEqual(ids(filterTutors(tutors, { q: 'pim' })), ['a']);
+  assert.deepEqual(ids(filterTutors(tutors, { q: 'PHYSICS' })), ['c'], 'headline match');
+  assert.deepEqual(ids(filterTutors(tutors, { q: 'ครู' })), ['b']);
+  assert.deepEqual(ids(filterTutors(tutors, { q: 'zzz' })), []);
+  assert.deepEqual(ids(filterTutors(tutors, { q: 'i', subject: 'Physics' })), ['a', 'c'], 'combines with other filters');
+});
+
+test('filterRequests: q matches student name or details', () => {
+  assert.deepEqual(ids(filterRequests(requests, { q: 'nok' })), ['r1']);
+  assert.deepEqual(ids(filterRequests(requests, { q: 'midterm' })), ['r1']);
+  assert.deepEqual(ids(filterRequests(requests, { q: 'มาย' })), ['r2']);
 });
