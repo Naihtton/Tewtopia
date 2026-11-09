@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getCurrentUserProfile } from '@/lib/profiles';
 import { parseCommaSeparatedList, syncTutorTeachingModes } from '@/lib/profile-sync';
 import { createClient } from '@/lib/supabase/server';
+import { parseRateRange } from '@/lib/rates';
 import { normalizeContactDetails } from '@/lib/tutor-contact';
 import { normalizeTeachingLevels } from '@/lib/tutor-visibility';
 
@@ -41,7 +42,7 @@ export async function GET() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('tutor_profiles')
-    .select('id, headline, hourly_rate, years_experience, teaching_modes, teaching_levels, contact_instagram, contact_facebook, contact_phone, contact_line, about, updated_at')
+    .select('id, headline, hourly_rate_min, hourly_rate_max, years_experience, teaching_modes, teaching_levels, contact_instagram, contact_facebook, contact_phone, contact_line, about, updated_at')
     .eq('id', result.profile.id)
     .maybeSingle();
 
@@ -53,7 +54,8 @@ export async function GET() {
     tutorProfile: data ?? {
       id: result.profile.id,
       headline: '',
-      hourly_rate: null,
+      hourly_rate_min: null,
+      hourly_rate_max: null,
       years_experience: null,
       teaching_modes: [],
       teaching_levels: [],
@@ -80,7 +82,8 @@ export async function PATCH(request: Request) {
 
   const body = (await request.json()) as {
     headline?: unknown;
-    hourlyRate?: unknown;
+    rateMin?: unknown;
+    rateMax?: unknown;
     yearsExperience?: unknown;
     teachingModes?: unknown;
     teachingLevels?: unknown;
@@ -88,10 +91,22 @@ export async function PATCH(request: Request) {
     about?: unknown;
   };
 
+  // Both empty = rate not set yet (tutor stays unlisted). Otherwise it must be a valid range.
+  const rateMinEmpty = body.rateMin === null || body.rateMin === undefined || String(body.rateMin).trim() === '';
+  const rateMaxEmpty = body.rateMax === null || body.rateMax === undefined || String(body.rateMax).trim() === '';
+  let rate = { hourly_rate_min: null as number | null, hourly_rate_max: null as number | null };
+  if (!(rateMinEmpty && rateMaxEmpty)) {
+    const parsed = parseRateRange(body.rateMin, body.rateMax);
+    if (!parsed.ok) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 });
+    }
+    rate = { hourly_rate_min: parsed.min, hourly_rate_max: parsed.max };
+  }
+
   const payload = {
     id: result.profile.id,
     headline: typeof body.headline === 'string' ? body.headline.trim() : '',
-    hourly_rate: parseNumber(body.hourlyRate),
+    ...rate,
     years_experience: parseNumber(body.yearsExperience),
     teaching_modes: parseCommaSeparatedList(body.teachingModes),
     teaching_levels: normalizeTeachingLevels(body.teachingLevels),
@@ -103,7 +118,7 @@ export async function PATCH(request: Request) {
   const { data, error } = await supabase
     .from('tutor_profiles')
     .upsert(payload, { onConflict: 'id' })
-    .select('id, headline, hourly_rate, years_experience, teaching_modes, teaching_levels, contact_instagram, contact_facebook, contact_phone, contact_line, about, updated_at')
+    .select('id, headline, hourly_rate_min, hourly_rate_max, years_experience, teaching_modes, teaching_levels, contact_instagram, contact_facebook, contact_phone, contact_line, about, updated_at')
     .single();
 
   if (error) {

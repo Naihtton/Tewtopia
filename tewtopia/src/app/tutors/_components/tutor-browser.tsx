@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
+import { formatRate } from '@/lib/rates';
 import { createClient } from '@/lib/supabase/client';
 import { contactLinks, normalizeContactDetails, type ContactLink } from '@/lib/tutor-contact';
 import type { BrowseTutorCard } from '@/lib/tutor-profiles';
@@ -72,8 +73,7 @@ function TutorSummary({ tutor, full = false }: { tutor: BrowseTutorCard; full?: 
           </div>
         </div>
         <div className="shrink-0 text-right">
-          <p className="text-lg font-extrabold text-ink">{tutor.hourlyRate} THB</p>
-          <p className="text-xs text-muted">per hour</p>
+          <p className="text-lg font-extrabold text-ink">{formatRate(tutor.rateMin, tutor.rateMax)}</p>
         </div>
       </div>
 

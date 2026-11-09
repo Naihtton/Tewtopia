@@ -17,7 +17,8 @@ export async function getCurrentTutorChecklist(profile: UserProfile): Promise<Tu
   return tutorSetupChecklist({
     displayName: profile.displayName,
     subjects: profile.preferredSubjects,
-    hourlyRate: tutorProfile?.hourlyRate ?? null,
+    rateMin: tutorProfile?.rateMin ?? null,
+    rateMax: tutorProfile?.rateMax ?? null,
     teachingLevels: tutorProfile?.teachingLevels ?? [],
     hasContact: tutorProfile ? hasAnyContact(tutorProfile.contacts) : false,
     visibility: settingsResult?.settings.profileVisibility ?? null,
