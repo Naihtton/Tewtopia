@@ -2,7 +2,17 @@ import { NextResponse } from 'next/server';
 import { getCurrentUserProfile } from '@/lib/profiles';
 import { parseCommaSeparatedList, syncTutorTeachingModes } from '@/lib/profile-sync';
 import { createClient } from '@/lib/supabase/server';
+import { normalizeContactDetails } from '@/lib/tutor-contact';
 import { normalizeTeachingLevels } from '@/lib/tutor-visibility';
+
+function contactColumns(contacts: ReturnType<typeof normalizeContactDetails>) {
+  return {
+    contact_instagram: contacts.instagram,
+    contact_facebook: contacts.facebook,
+    contact_phone: contacts.phone,
+    contact_line: contacts.line,
+  };
+}
 
 function parseNumber(value: unknown) {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -31,7 +41,7 @@ export async function GET() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('tutor_profiles')
-    .select('id, headline, hourly_rate, years_experience, teaching_modes, teaching_levels, about, updated_at')
+    .select('id, headline, hourly_rate, years_experience, teaching_modes, teaching_levels, contact_instagram, contact_facebook, contact_phone, contact_line, about, updated_at')
     .eq('id', result.profile.id)
     .maybeSingle();
 
@@ -47,6 +57,10 @@ export async function GET() {
       years_experience: null,
       teaching_modes: [],
       teaching_levels: [],
+      contact_instagram: '',
+      contact_facebook: '',
+      contact_phone: '',
+      contact_line: '',
       about: '',
       updated_at: null,
     },
@@ -70,6 +84,7 @@ export async function PATCH(request: Request) {
     yearsExperience?: unknown;
     teachingModes?: unknown;
     teachingLevels?: unknown;
+    contacts?: unknown;
     about?: unknown;
   };
 
@@ -80,6 +95,7 @@ export async function PATCH(request: Request) {
     years_experience: parseNumber(body.yearsExperience),
     teaching_modes: parseCommaSeparatedList(body.teachingModes),
     teaching_levels: normalizeTeachingLevels(body.teachingLevels),
+    ...contactColumns(normalizeContactDetails(body.contacts)),
     about: typeof body.about === 'string' ? body.about.trim() : '',
   };
 
@@ -87,7 +103,7 @@ export async function PATCH(request: Request) {
   const { data, error } = await supabase
     .from('tutor_profiles')
     .upsert(payload, { onConflict: 'id' })
-    .select('id, headline, hourly_rate, years_experience, teaching_modes, teaching_levels, about, updated_at')
+    .select('id, headline, hourly_rate, years_experience, teaching_modes, teaching_levels, contact_instagram, contact_facebook, contact_phone, contact_line, about, updated_at')
     .single();
 
   if (error) {

@@ -3,6 +3,13 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import type { UserProfile } from '@/lib/profiles';
+import {
+  CONTACT_CHANNELS,
+  hasAnyContact,
+  normalizeContactDetails,
+  type ContactChannel,
+  type ContactDetails,
+} from '@/lib/tutor-contact';
 import type { TutorProfile } from '@/lib/tutor-profiles';
 import {
   tutorListingStatus,
@@ -25,6 +32,7 @@ type TutorProfileState = {
   yearsExperience: string;
   teachingModes: string;
   teachingLevels: TeachingLevel[];
+  contacts: ContactDetails;
   about: string;
   updatedAt: string | null;
 };
@@ -36,6 +44,7 @@ function toFormState(tutorProfile: TutorProfile): TutorProfileState {
     yearsExperience: tutorProfile.yearsExperience?.toString() ?? '',
     teachingModes: tutorProfile.teachingModes.join(', '),
     teachingLevels: tutorProfile.teachingLevels,
+    contacts: tutorProfile.contacts,
     about: tutorProfile.about,
     updatedAt: tutorProfile.updatedAt,
   };
@@ -68,9 +77,14 @@ export function TutorProfileForm({ profile, tutorProfile, initialError, visibili
     hourlyRate: form.hourlyRate.trim() === '' ? null : Number(form.hourlyRate),
     subjects: profile.preferredSubjects,
     teachingLevels: form.teachingLevels,
+    hasContact: hasAnyContact(normalizeContactDetails(form.contacts)),
     visibility,
   });
   const missingInProfile = missing.includes('display name') || missing.includes('subjects');
+
+  function setContact(channel: ContactChannel, value: string) {
+    setForm((current) => ({ ...current, contacts: { ...current.contacts, [channel]: value } }));
+  }
 
   function toggleLevel(level: TeachingLevel) {
     setForm((current) => ({
@@ -102,6 +116,10 @@ export function TutorProfileForm({ profile, tutorProfile, initialError, visibili
           years_experience: number | null;
           teaching_modes: string[] | null;
           teaching_levels: string[] | null;
+          contact_instagram: string | null;
+          contact_facebook: string | null;
+          contact_phone: string | null;
+          contact_line: string | null;
           about: string | null;
           updated_at: string | null;
         };
@@ -118,6 +136,12 @@ export function TutorProfileForm({ profile, tutorProfile, initialError, visibili
         yearsExperience: data.tutorProfile.years_experience?.toString() ?? '',
         teachingModes: (data.tutorProfile.teaching_modes ?? []).join(', '),
         teachingLevels: normalizeTeachingLevels(data.tutorProfile.teaching_levels),
+        contacts: normalizeContactDetails({
+          instagram: data.tutorProfile.contact_instagram,
+          facebook: data.tutorProfile.contact_facebook,
+          phone: data.tutorProfile.contact_phone,
+          line: data.tutorProfile.contact_line,
+        }),
         about: data.tutorProfile.about ?? '',
         updatedAt: data.tutorProfile.updated_at,
       });
@@ -277,6 +301,31 @@ export function TutorProfileForm({ profile, tutorProfile, initialError, visibili
             </div>
           </div>
 
+          <fieldset>
+            <legend className={ui.label}>Contact details</legend>
+            <p className="-mt-1 mb-3 text-xs text-muted">
+              Shown only to signed-in students who tap &quot;Contact tutor&quot;. Fill in at least one.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {CONTACT_CHANNELS.map(({ channel, label, placeholder }) => (
+                <div key={channel}>
+                  <label htmlFor={`contact-${channel}`} className="mb-1 block text-xs font-bold text-muted">
+                    {label}
+                  </label>
+                  <input
+                    id={`contact-${channel}`}
+                    value={form.contacts[channel]}
+                    onChange={(event) => setContact(channel, event.target.value)}
+                    maxLength={100}
+                    inputMode={channel === 'phone' ? 'tel' : undefined}
+                    className={ui.input}
+                    placeholder={placeholder}
+                  />
+                </div>
+              ))}
+            </div>
+          </fieldset>
+
           <div>
             <label htmlFor="about" className={ui.label}>
               About your teaching
@@ -298,7 +347,7 @@ export function TutorProfileForm({ profile, tutorProfile, initialError, visibili
             >
               {isSaving ? 'Saving...' : 'Save tutor profile'}
             </button>
-            <p className="text-sm text-muted">You appear on Find tutors once rate, subjects and levels are filled in.</p>
+            <p className="text-sm text-muted">You appear on Find tutors once rate, subjects, levels and a contact are filled in.</p>
           </div>
         </form>
 
