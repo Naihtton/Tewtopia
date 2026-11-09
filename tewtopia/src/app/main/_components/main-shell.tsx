@@ -7,6 +7,7 @@ type MainShellProps = {
   children: React.ReactNode;
   username: string;
   role: UserRole;
+  avatarUrl: string | null;
 };
 
 async function navState(): Promise<Pick<NavUser, 'badges' | 'owns'>> {
@@ -29,12 +30,12 @@ async function navState(): Promise<Pick<NavUser, 'badges' | 'owns'>> {
   };
 }
 
-export async function MainShell({ children, username, role }: MainShellProps) {
+export async function MainShell({ children, username, role, avatarUrl }: MainShellProps) {
   const state = await navState();
 
   return (
     <div className={`${ui.shell} flex flex-col`}>
-      <TopNav user={{ name: username, role, ...state }} />
+      <TopNav user={{ name: username, role, avatarUrl, ...state }} />
       <main className="flex flex-1 px-4 py-8 md:px-8">
         <div className="mx-auto flex w-full max-w-7xl">{children}</div>
       </main>

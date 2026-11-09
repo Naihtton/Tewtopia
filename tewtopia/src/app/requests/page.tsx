@@ -1,21 +1,24 @@
+import { FilterBar } from '@/app/_components/filter-bar';
 import { TopNav } from '@/app/_components/top-nav';
 import { MainShell } from '@/app/main/_components/main-shell';
+import { filterRequests, parseRequestFilters, subjectOptions } from '@/lib/filters';
 import { getCurrentUserProfile } from '@/lib/profiles';
+import { DAYS, TEACHING_MODES } from '@/lib/requests';
+import { TEACHING_LEVELS } from '@/lib/tutor-visibility';
 import { getTutorBoardState, listOpenRequests, type MyOfferOnRequest } from '@/lib/request-board';
 import { ui } from '@/lib/ui';
 import { RequestBoard, type BoardViewer } from './_components/request-board';
 
 type RequestsPageProps = {
-  searchParams: Promise<{ request?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
 // Public page: anyone can browse open requests; listed tutors can send offers.
 export default async function RequestsPage({ searchParams }: RequestsPageProps) {
-  const [{ request: initialRequestId }, profileResult, result] = await Promise.all([
-    searchParams,
-    getCurrentUserProfile(),
-    listOpenRequests(),
-  ]);
+  const [params, profileResult, result] = await Promise.all([searchParams, getCurrentUserProfile(), listOpenRequests()]);
+  const initialRequestId = typeof params.request === 'string' ? params.request : null;
+  const filters = parseRequestFilters(params);
+  const requests = filterRequests(result.requests, filters);
 
   let viewer: BoardViewer = 'guest';
   let myOffers: Record<string, MyOfferOnRequest> = {};
@@ -39,12 +42,43 @@ export default async function RequestsPage({ searchParams }: RequestsPageProps) 
       {result.error ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{result.error}</div>
       ) : (
-        <RequestBoard
-          requests={result.requests}
+        <>
+          {result.requests.length > 0 && (
+            <FilterBar
+              selects={[
+                {
+                  name: 'subject',
+                  label: 'Subject',
+                  anyLabel: 'Any subject',
+                  options: subjectOptions(result.requests.map((request) => request.subjects)).map((subject) => ({
+                    value: subject,
+                    label: subject,
+                  })),
+                },
+                { name: 'level', label: 'Level', anyLabel: 'Any level', options: [...TEACHING_LEVELS] },
+                { name: 'mode', label: 'Learning mode', anyLabel: 'Any mode', options: [...TEACHING_MODES] },
+                { name: 'day', label: 'Day', anyLabel: 'Any day', options: [...DAYS] },
+              ]}
+              search={{ name: 'q', placeholder: 'Search by student name or details' }}
+              values={{
+                q: filters.q ?? '',
+                subject: filters.subject ?? '',
+                level: filters.level ?? '',
+                mode: filters.mode ?? '',
+                day: filters.day ?? '',
+              }}
+              resultCount={requests.length}
+              noun={['request', 'requests']}
+            />
+          )}
+          <RequestBoard
+          requests={requests}
+          allRequests={result.requests}
           viewer={viewer}
           myOffers={myOffers}
-          initialRequestId={initialRequestId ?? null}
-        />
+          initialRequestId={initialRequestId}
+          />
+        </>
       )}
     </div>
   );
@@ -52,7 +86,7 @@ export default async function RequestsPage({ searchParams }: RequestsPageProps) 
   if (profileResult) {
     const { profile } = profileResult;
     return (
-      <MainShell username={profile.displayName || profile.email} role={profile.role}>
+      <MainShell username={profile.displayName || profile.email} role={profile.role} avatarUrl={profile.avatarUrl}>
         {content}
       </MainShell>
     );

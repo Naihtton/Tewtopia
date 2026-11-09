@@ -1,21 +1,24 @@
+import { FilterBar } from '@/app/_components/filter-bar';
 import { TopNav } from '@/app/_components/top-nav';
 import { MainShell } from '@/app/main/_components/main-shell';
 import { getCurrentUserProfile } from '@/lib/profiles';
+import { filterTutors, hasActiveFilters, parseTutorFilters, subjectOptions } from '@/lib/filters';
+import { TEACHING_MODES } from '@/lib/requests';
 import { listPublicTutorCards } from '@/lib/tutor-profiles';
+import { TEACHING_LEVELS } from '@/lib/tutor-visibility';
 import { TutorBrowser } from './_components/tutor-browser';
 import { ui } from '@/lib/ui';
 
 // Public page: guests and signed-in users (students and tutors) can all browse.
 type TutorsPageProps = {
-  searchParams: Promise<{ tutor?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export default async function TutorsPage({ searchParams }: TutorsPageProps) {
-  const [{ tutor: initialTutorId }, profileResult, result] = await Promise.all([
-    searchParams,
-    getCurrentUserProfile(),
-    listPublicTutorCards(),
-  ]);
+  const [params, profileResult, result] = await Promise.all([searchParams, getCurrentUserProfile(), listPublicTutorCards()]);
+  const initialTutorId = typeof params.tutor === 'string' ? params.tutor : null;
+  const filters = parseTutorFilters(params);
+  const tutors = filterTutors(result.tutors, filters);
 
   const content = (
     <div className="flex-1 space-y-6">
@@ -34,12 +37,39 @@ export default async function TutorsPage({ searchParams }: TutorsPageProps) {
         </div>
       ) : (
         <>
-          <span className={ui.chipAccent}>{result.tutors.length} {result.tutors.length === 1 ? 'tutor' : 'tutors'} available</span>
-          <TutorBrowser
-            tutors={result.tutors}
-            isSignedIn={profileResult !== null}
-            initialTutorId={initialTutorId ?? null}
+          <FilterBar
+            selects={[
+              {
+                name: 'subject',
+                label: 'Subject',
+                anyLabel: 'Any subject',
+                options: subjectOptions(result.tutors.map((tutor) => tutor.preferredSubjects)).map((subject) => ({
+                  value: subject,
+                  label: subject,
+                })),
+              },
+              { name: 'level', label: 'Level', anyLabel: 'Any level', options: [...TEACHING_LEVELS] },
+              { name: 'mode', label: 'Teaching mode', anyLabel: 'Any mode', options: [...TEACHING_MODES] },
+            ]}
+            search={{ name: 'q', placeholder: 'Search tutors by name or headline' }}
+            number={{ name: 'maxRate', label: 'Max', placeholder: 'any' }}
+            values={{
+              q: filters.q ?? '',
+              subject: filters.subject ?? '',
+              level: filters.level ?? '',
+              mode: filters.mode ?? '',
+              maxRate: filters.maxRate ? String(filters.maxRate) : '',
+            }}
+            resultCount={tutors.length}
+            noun={['tutor', 'tutors']}
           />
+          {tutors.length === 0 && hasActiveFilters(filters) ? (
+            <div className="rounded-[1.5rem] border border-line bg-white p-6 text-sm text-muted">
+              No tutors match these filters. Try removing one.
+            </div>
+          ) : (
+            <TutorBrowser tutors={tutors} isSignedIn={profileResult !== null} initialTutorId={initialTutorId} />
+          )}
         </>
       )}
     </div>
@@ -48,7 +78,7 @@ export default async function TutorsPage({ searchParams }: TutorsPageProps) {
   if (profileResult) {
     const { profile } = profileResult;
     return (
-      <MainShell username={profile.displayName || profile.email} role={profile.role}>
+      <MainShell username={profile.displayName || profile.email} role={profile.role} avatarUrl={profile.avatarUrl}>
         {content}
       </MainShell>
     );

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { Avatar } from '@/app/_components/avatar';
 import { ContactList } from '@/app/_components/contact-list';
 import { Modal } from '@/app/_components/modal';
 import { formatRate } from '@/lib/rates';
@@ -66,9 +67,7 @@ export function TutorSummary({ tutor, full = false }: { tutor: BrowseTutorCard; 
     <>
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary-soft text-lg font-extrabold uppercase text-primary-deep">
-            {tutor.displayName.slice(0, 1)}
-          </span>
+          <Avatar name={tutor.displayName} url={tutor.avatarUrl} className={full ? 'h-16 w-16 text-2xl' : 'h-12 w-12 text-lg'} />
           <div>
             <h2 className="text-lg font-extrabold text-ink">{tutor.displayName}</h2>
             <p className="mt-0.5 text-sm text-muted">{tutor.headline}</p>
