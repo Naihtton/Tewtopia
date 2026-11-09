@@ -9,31 +9,46 @@ import { ui } from '@/lib/ui';
 export type NavUser = {
   name: string;
   role: UserRole;
+  // Things waiting on this user (students: new offers; tutors: accepted offers).
+  badge: number;
 };
+
+type Tab = { href: string; label: string; badge?: boolean };
 
 type TopNavProps = {
   // null = signed-out visitor: only the logo and "Log in" are shown.
   user: NavUser | null;
 };
 
-function tabsFor(role: UserRole) {
-  return [
-    { href: '/main/dashboard', label: 'Dashboard' },
-    role === 'tutor'
-      ? { href: '/main/tutor-profile', label: 'Tutor profile' }
-      : { href: '/tutors', label: 'Find tutors' },
-    { href: '/main/profile', label: 'Profile' },
-    { href: '/main/settings', label: 'Settings' },
-  ];
+function tabsFor(role: UserRole): Tab[] {
+  return role === 'tutor'
+    ? [
+        { href: '/main/dashboard', label: 'Dashboard' },
+        { href: '/requests', label: 'Request board' },
+        { href: '/main/offers', label: 'My offers', badge: true },
+        // The tutor's basic Profile is linked from the Tutor profile page.
+        { href: '/main/tutor-profile', label: 'Tutor profile' },
+        { href: '/main/settings', label: 'Settings' },
+      ]
+    : [
+        { href: '/main/dashboard', label: 'Dashboard' },
+        { href: '/tutors', label: 'Find tutors' },
+        { href: '/main/requests', label: 'My requests', badge: true },
+        { href: '/main/profile', label: 'Profile' },
+        { href: '/main/settings', label: 'Settings' },
+      ];
 }
 
 function ctaFor(role: UserRole) {
   return role === 'tutor'
     ? { href: '/main/tutor-profile', label: 'Edit tutor profile' }
-    : { href: '/tutors', label: 'Find a tutor' };
+    : { href: '/main/requests/new', label: 'Post a request' };
 }
 
-const guestTabs = [{ href: '/tutors', label: 'Find tutors' }];
+const guestTabs: Tab[] = [
+  { href: '/tutors', label: 'Find tutors' },
+  { href: '/requests', label: 'Request board' },
+];
 
 export function TopNav({ user }: TopNavProps) {
   const pathname = usePathname();
@@ -57,6 +72,14 @@ export function TopNav({ user }: TopNavProps) {
         }`}
       >
         {tab.label}
+        {tab.badge && user && user.badge > 0 && (
+          <span
+            aria-label={`${user.badge} need attention`}
+            className="ml-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-cta px-1.5 text-[0.7rem] font-extrabold leading-5 text-white"
+          >
+            {user.badge}
+          </span>
+        )}
       </Link>
     );
   });

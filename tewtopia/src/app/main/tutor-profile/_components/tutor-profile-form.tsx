@@ -176,7 +176,11 @@ export function TutorProfileForm({ profile, tutorProfile, initialError, visibili
       <div>
         <h1 className={`${ui.title} text-4xl md:text-5xl`}>Tutor Profile</h1>
         <p className="mt-3 max-w-2xl text-base text-muted">
-          Build the teaching profile students see on Find tutors.
+          Build the teaching profile students see on Find tutors. Your name, subjects and bio are in{' '}
+          <Link href="/main/profile" className="font-bold text-primary-deep underline underline-offset-2">
+            Profile
+          </Link>
+          .
         </p>
       </div>
 
