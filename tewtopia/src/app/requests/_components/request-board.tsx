@@ -14,7 +14,10 @@ import { ui } from '@/lib/ui';
 export type BoardViewer = 'guest' | 'student' | 'tutor-listed' | 'tutor-unlisted';
 
 type RequestBoardProps = {
+  // After filters; shown in the grid.
   requests: RequestCard[];
+  // Before filters; a shared ?request= link still opens even if filters hide it.
+  allRequests: RequestCard[];
   viewer: BoardViewer;
   myOffers: Record<string, MyOfferOnRequest>;
   // From ?request=<id>, so a shared link or a return from log-in reopens the modal.
@@ -25,9 +28,9 @@ function requestUrl(id: string | null) {
   return id ? `/requests?request=${encodeURIComponent(id)}` : '/requests';
 }
 
-export function RequestBoard({ requests, viewer, myOffers, initialRequestId }: RequestBoardProps) {
+export function RequestBoard({ requests, allRequests, viewer, myOffers, initialRequestId }: RequestBoardProps) {
   const [selectedId, setSelectedId] = useState<string | null>(initialRequestId);
-  const selected = requests.find((request) => request.id === selectedId) ?? null;
+  const selected = allRequests.find((request) => request.id === selectedId) ?? null;
 
   function select(id: string | null) {
     setSelectedId(id);
@@ -38,7 +41,7 @@ export function RequestBoard({ requests, viewer, myOffers, initialRequestId }: R
     <>
       {requests.length === 0 ? (
         <div className="rounded-[1.5rem] border border-line bg-white p-6 text-sm text-muted">
-          No open requests right now. Check back soon.
+          {allRequests.length === 0 ? 'No open requests right now. Check back soon.' : 'No requests match these filters. Try removing one.'}
         </div>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
