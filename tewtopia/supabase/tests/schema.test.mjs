@@ -1,0 +1,126 @@
+// Tests share one database and run in order (node:test runs a file's tests sequentially).
+import assert from 'node:assert/strict';
+import { before, test } from 'node:test';
+import { as, errorOf, freshDb, reset, rows, signUp } from './harness.mjs';
+
+const T = '11111111-1111-1111-1111-111111111111'; // tutor
+const S = '22222222-2222-2222-2222-222222222222'; // student
+const A = '33333333-3333-3333-3333-333333333333'; // tried to sign up as admin
+const L = '44444444-4444-4444-4444-444444444444'; // legacy account (no profile row)
+
+let db;
+
+before(async () => {
+  db = await freshDb();
+  await signUp(db, T, 'tutor@x.com', { role: 'tutor', display_name: ' Pim ' });
+  await signUp(db, S, 'stud@x.com', { display_name: 'Nok' });
+  await signUp(db, A, 'adm@x.com', { role: 'admin' });
+});
+
+const listed = () => rows(db, `select * from public.public_tutor_cards`);
+
+async function makeTutorComplete() {
+  await reset(db);
+  await db.exec(`
+    update public.profiles set preferred_subjects = '{Math}' where id = '${T}';
+    update public.tutor_profiles set hourly_rate = 500, teaching_levels = '{primary}', contact_line = 'pimline' where id = '${T}';
+    update public.user_settings set profile_visibility = 'public' where id = '${T}';
+  `);
+}
+
+test('sign-up trigger creates rows from metadata', async () => {
+  const profiles = await rows(db, `select id::text, role, display_name from public.profiles`);
+  const byId = Object.fromEntries(profiles.map((p) => [p.id, p]));
+  assert.equal(byId[T].role, 'tutor');
+  assert.equal(byId[T].display_name, 'Pim');
+  assert.equal(byId[S].role, 'student');
+  assert.equal(byId[A].role, 'student', 'role admin in metadata becomes student');
+
+  const settings = Object.fromEntries(
+    (await rows(db, `select id::text, profile_visibility from public.user_settings`)).map((s) => [s.id, s.profile_visibility]),
+  );
+  assert.equal(settings[T], 'public');
+  assert.equal(settings[S], 'matched_only');
+  assert.equal((await rows(db, `select 1 from public.tutor_profiles where id = '${T}'`)).length, 1);
+  assert.equal((await rows(db, `select 1 from public.tutor_profiles where id = '${S}'`)).length, 0);
+});
+
+test('tutor is listed only when complete, has a contact and is not private', async () => {
+  await reset(db);
+  assert.equal((await listed()).length, 0, 'incomplete tutor not listed');
+  await db.exec(`
+    update public.profiles set preferred_subjects = '{Math}' where id = '${T}';
+    update public.tutor_profiles set hourly_rate = 500, teaching_levels = '{primary}' where id = '${T}';
+  `);
+  assert.equal((await listed()).length, 0, 'complete but no contact → not listed');
+  await makeTutorComplete();
+  const [card] = await listed();
+  assert.ok(card, 'complete tutor listed');
+  assert.equal('email' in card, false, 'view has no email');
+  assert.equal(Object.keys(card).some((k) => k.startsWith('contact')), false, 'view has no contact columns');
+
+  await db.exec(`update public.tutor_profiles set hourly_rate = 0 where id = '${T}'`);
+  assert.equal((await listed()).length, 0, 'rate 0 hides');
+  await makeTutorComplete();
+  await db.exec(`update public.user_settings set profile_visibility = 'private' where id = '${T}'`);
+  assert.equal((await listed()).length, 0, 'private hides');
+  await db.exec(`update public.user_settings set profile_visibility = 'matched_only' where id = '${T}'`);
+  assert.equal((await listed()).length, 1, 'matched_only still listed');
+  await makeTutorComplete();
+});
+
+test('teaching levels and contact lengths are constrained', async () => {
+  await reset(db);
+  assert.ok(await errorOf(db, `update public.tutor_profiles set teaching_levels = '{weekend}' where id = $1`, [T]));
+  assert.ok(await errorOf(db, `update public.tutor_profiles set contact_phone = $1 where id = $2`, ['9'.repeat(101), T]));
+});
+
+test('anon sees no base-table rows but can read the public view', async () => {
+  await as(db, 'anon');
+  for (const table of ['profiles', 'user_settings', 'tutor_profiles']) {
+    assert.equal((await rows(db, `select * from public.${table}`)).length, 0, table);
+  }
+  assert.equal((await listed()).length, 1);
+});
+
+test('get_tutor_contacts: authenticated only, listed tutors only', async () => {
+  await as(db, 'anon');
+  assert.ok(await errorOf(db, `select * from public.get_tutor_contacts($1)`, [T]), 'anon cannot execute');
+
+  await as(db, 'authenticated', S);
+  const [contacts] = await rows(db, `select * from public.get_tutor_contacts($1)`, [T]);
+  assert.equal(contacts.line, 'pimline');
+  assert.equal(contacts.instagram, '');
+  assert.equal((await rows(db, `select * from public.get_tutor_contacts($1)`, [S])).length, 0, 'non-listed user → nothing');
+  assert.equal((await rows(db, `select contact_line from public.tutor_profiles where id = $1`, [T])).length, 0);
+
+  await reset(db);
+  await db.exec(`update public.user_settings set profile_visibility = 'private' where id = '${T}'`);
+  await as(db, 'authenticated', S);
+  assert.equal((await rows(db, `select * from public.get_tutor_contacts($1)`, [T])).length, 0, 'private tutor hidden');
+  await makeTutorComplete();
+});
+
+test('signed-in users see only their own profile', async () => {
+  await as(db, 'authenticated', S);
+  assert.equal((await rows(db, `select * from public.profiles`)).length, 1);
+});
+
+test('role guard: no self-promotion to admin, student↔tutor allowed', async () => {
+  await as(db, 'authenticated', S);
+  assert.match(await errorOf(db, `update public.profiles set role = 'admin' where id = $1`, [S]), /role change not allowed/);
+
+  await signUp(db, L, 'legacy@x.com');
+  await db.exec(`delete from public.user_roles where user_id = '${L}'; delete from public.profiles where id = '${L}'`);
+  await as(db, 'authenticated', L);
+  assert.match(
+    await errorOf(db, `insert into public.profiles (id, email, role) values ($1, 'legacy@x.com', 'admin')`, [L]),
+    /role change not allowed/,
+  );
+  assert.equal(await errorOf(db, `insert into public.profiles (id, email, role) values ($1, 'legacy@x.com', 'student')`, [L]), null);
+  assert.ok(await errorOf(db, `insert into public.user_roles (user_id, role) values ($1, 'admin')`, [L]));
+  await errorOf(db, `update public.user_roles set role = 'admin' where user_id = $1`, [L]);
+  await reset(db);
+  const roles = await rows(db, `select role from public.user_roles where user_id = $1`, [L]);
+  assert.equal(roles.some((r) => r.role === 'admin'), false);
+});
